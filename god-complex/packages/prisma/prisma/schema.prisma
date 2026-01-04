@@ -13,9 +13,123 @@ datasource db {
   provider = "postgresql"
 }
 
-model User{
-  id    String   @id             @default(uuid())
-  name  String   @unique
-  email String
-  time  DateTime @default(now())
+enum GoalCategory {
+  STUDY
+  HEALTH
+  CAREER
+  BUILD
+  SOCIAL
+}
+
+enum GoalStatus {
+  COMPLETED
+  MIN_EFFORT
+  FAILED
+}
+
+enum FailureReason {
+  POOR_PLANNING
+  LOW_ENERGY
+  DISTRACTION
+  EXTERNAL_DEPENDENCY
+  FEAR_AVOIDANCE
+  SYSTEM_ASSIGNED
+}
+
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  name            String
+  createdAt       DateTime @default(now())
+
+  memberships     Membership[]
+  goals           Goal[]
+  goalResults     GoalResult[]
+  monthlyOutcomes MonthlyOutcome[]
+}
+
+model Group {
+  id              String   @id @default(uuid())
+  name            String
+  monthlyPledge   Int
+  cutoffHour      Int      
+  createdAt       DateTime @default(now())
+
+  memberships     Membership[]
+  goals           Goal[]
+  monthlyOutcomes MonthlyOutcome[]
+}
+
+
+model Membership {
+  id        String   @id @default(uuid())
+  userId    String
+  groupId   String
+  month     String   
+  joinedAt  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId, month])
+}
+
+model Goal {
+  id              String        @id @default(uuid())
+  userId          String
+  groupId         String
+  date            DateTime      
+  title           String
+  category        GoalCategory
+  finishCondition String
+  minEffort       String
+  isUncomfortable Boolean
+
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id])
+  group           Group    @relation(fields: [groupId], references: [id])
+  result          GoalResult?
+
+  @@unique([userId, groupId, date, title])
+}
+
+
+model GoalResult {
+  id            String @id @default(uuid())
+  goalId        String @unique
+  userId        String
+
+  status        GoalStatus
+  failureReason FailureReason?
+  recordedAt    DateTime @default(now())
+
+  goal          Goal @relation(fields: [goalId], references: [id])
+  user          User @relation(fields: [userId], references: [id])
+}
+
+
+
+model MonthlyOutcome {
+  id                String   @id @default(uuid())
+  userId            String
+  groupId           String
+  month             String   
+
+  averageDailyScore Float
+  activeDays        Int
+  finalScore        Float
+  rank              Int
+
+  payoutAmount      Int
+  penaltyAmount     Int
+  platformFeeShare  Int
+
+  createdAt         DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id])
+  group             Group    @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId, month])
 }
