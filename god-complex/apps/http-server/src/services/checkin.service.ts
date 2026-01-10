@@ -1,4 +1,5 @@
 import { prisma } from "@god-complex/prisma";
+import { FailureReason } from "../../../../packages/prisma/generated/prisma/enums";
 
 interface CheckinInput {
   groupId: string;
@@ -32,32 +33,83 @@ export async function submitCheckin(
     throw new Error("All goals must be checked in");
   }
 
-  
- 
-const existingResult = await prisma.goalResult.findMany({
-  where: {
-    goalId: { in: results.map(r => r.goalId) }
-  }
-});
+  const existingResult = await prisma.goalResult.findMany({
+    where: {
+      goalId: { in: results.map(r => r.goalId) }
+    }
+  });
 
-if (existingResult.length > 0) {
-  throw new Error("One or more goals have already been checked in.");
-}
+  if (existingResult.length > 0) {
+    throw new Error("One or more goals have already been checked in.");
+  }
+
+  
+  const processedResults = await Promise.all(
+    results.map(async (r) => {
+      if (r.status === "FAILED") {
+        if (!r.failureReason) {
+          throw new Error("Failure reason required");
+        }
+        
+        const repeated = await hasRepeatedExcuse(userId, r.failureReason);
+        if (repeated) {
+          return {
+            ...r,
+            failureReason: "SYSTEM_ASSIGNED"
+          };
+        }
+      }
+      return r;
+    })
+  );
 
   await prisma.$transaction(
-    results.map((r) => {
-      if (r.status === "FAILED" && !r.failureReason) {
-        throw new Error("Failure reason required");
-      }
-
+    processedResults.map((r) => {
       return prisma.goalResult.create({
         data: {
-          goal : {connect:{id:r.goalId}},
-          user : {connect: {id: userId}},
+          goal: { connect: { id: r.goalId } },
+          user: { connect: { id: userId } },
           status: r.status,
           failureReason: r.failureReason,
         },
       });
     })
   );
+}
+
+export async function hasRepeatedExcuse(
+  userId: string,
+  reason: any
+): Promise<boolean> {
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 7);
+
+  const count = await prisma.goalResult.count({
+    where: {
+      failureReason: reason,
+      goal: {
+        userId,
+        date: { gte: since },
+      },
+    },
+  });
+  return count >= 2;
+}
+
+export async function autoFailMissedCheckins(date: string) {
+  const goalsWithoutResult = await prisma.goal.findMany({
+    where: {
+      date: new Date(date),
+      result: null,
+    },
+  });
+
+  await prisma.goalResult.createMany({
+    data: goalsWithoutResult.map(g => ({
+      goalId: g.id,
+      userId: g.userId,
+      status: "FAILED",
+      failureReason: "SYSTEM_ASSIGNED",
+    })),
+  });
 }

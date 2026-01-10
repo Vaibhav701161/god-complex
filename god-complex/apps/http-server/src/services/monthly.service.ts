@@ -20,29 +20,62 @@ export async function closeMonth(groupId:string,month:string){
   include :{result:true},
  });
 
- const scores: Record<string,number> = {};
+ const userDayMap: Record<string, Record<string, number>> = {};
 
- for(const g of goals){
-  if(!scores[g.userId]) scores[g.userId] =0;
-  if(!g.result) continue;
+for (const g of goals) {
+  if (!g.result) continue;
 
-  if (g.result.status === "COMPLETED") scores[g.userId] += 1;
-  if (g.result.status === "MIN_EFFORT") scores[g.userId] += 0.5;
- }
+  if (!userDayMap[g.userId]) {
+    userDayMap[g.userId] = {};
+  }
 
- const ranked = Object.entries(scores).sort((a,b) =>b[1] - a[1]);
+  const day = g.date.toISOString().split("T")[0];
+
+  if (!userDayMap[g.userId][day]) {
+    userDayMap[g.userId][day] = 0;
+  }
+
+  if (g.result.status === "COMPLETED") {
+    userDayMap[g.userId][day] += 1;
+  }
+
+  if (g.result.status === "MIN_EFFORT") {
+    userDayMap[g.userId][day] += 0.5;
+  }
+}
+
+const finalScores = Object.entries(userDayMap).map(
+  ([userId, days]) => {
+    const dailyScores = Object.values(days);
+    const activeDays = dailyScores.length;
+
+    const averageDailyScore =
+      dailyScores.reduce((a, b) => a + b, 0) / activeDays;
+
+    return {
+      userId,
+      finalScore: averageDailyScore * activeDays,
+      averageDailyScore,
+      activeDays,
+    };
+  }
+);
+
+const ranked = finalScores.sort(
+  (a, b) => b.finalScore - a.finalScore
+);
 
   await prisma.$transaction(
-    ranked.map(([userId, score], index) =>
+    ranked.map((userScore, index) =>
       prisma.monthlyOutcome.create({
         data: {
-          userId,
+          userId: userScore.userId,
           groupId,
           month,
-          finalScore: score,
+          finalScore: userScore.finalScore,
           rank: index + 1,
-          averageDailyScore: score, // refine later
-          activeDays: 0,
+          averageDailyScore: userScore.averageDailyScore,
+          activeDays: userScore.activeDays,
           payoutAmount: 0,
           penaltyAmount: 0,
           platformFeeShare: 0,

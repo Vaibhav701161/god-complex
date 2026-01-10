@@ -1,5 +1,5 @@
 import {prisma} from "@god-complex/prisma";
-import {getMonth,isBeforeCutoff} from "../lib/time";
+import {getMonth,getWeekRange,isBeforeCutoff} from "../lib/time";
 
 interface DailyGoalInput{
     groupId:string,
@@ -19,9 +19,13 @@ export async function submitDailyGoals(
 ) {
   const { groupId, date, goals } = data;
 
-  if (!isBeforeCutoff(9)) {
+  
+  const group = await prisma.group.findUnique({where:{id:groupId}});
+  if(!group) throw new Error("Group not found");
+  if(!isBeforeCutoff(group.cutoffHour)){
     throw new Error("Daily goal cutoff passed");
   }
+
 
   if (goals.length === 0) {
     throw new Error("At least one goal required");
@@ -42,6 +46,25 @@ export async function submitDailyGoals(
 
   if (!membership) {
     throw new Error("User not a member for this month");
+  }
+
+  const {start,end} = await getWeekRange(date);
+
+  const UncomfortableCount = await prisma.goal.count({
+    where:{
+        userId,
+        groupId,
+        isUncomfortable:true,
+        date: {
+            gte : start,
+            lte:end,
+        },
+    },
+  });
+
+  const submittingUncomfortable = goals.some(g => g.isUncomfortable);
+  if(UncomfortableCount === 0 && !submittingUncomfortable){
+    throw new Error("You must set at least one uncomfortable goal this week to maintain accountability");
   }
 
   
