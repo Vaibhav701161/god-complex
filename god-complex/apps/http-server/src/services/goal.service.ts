@@ -32,9 +32,7 @@ export async function submitDailyGoals(
 
   const month = getMonth(date);
 
-  
   await assertMembership(userId, groupId, month);
-
 
   const { start, end } = await getWeekRange(date);
 
@@ -83,6 +81,35 @@ export async function submitDailyGoals(
   );
 }
 
+
 export async function getDailyGoals(groupId: string, date: string) {
-  return [];
+  return prisma.goal.findMany({
+    where: {
+      groupId,
+      date: new Date(date),
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true, 
+        },
+      },
+      result: true, 
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+}
+
+export async function getDailyReport(
+  userId: string,
+  groupId: string,
+  date: string
+) {
+  return prisma.goal.findMany({
+    where: { userId, groupId, date: new Date(date) },
+    include: { result: true },
+  });
 }

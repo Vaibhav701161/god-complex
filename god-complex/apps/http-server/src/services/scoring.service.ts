@@ -1,5 +1,6 @@
 import {prisma} from "@god-complex/prisma";
 import { assertMembership } from "@/lib/guards";
+import { getWeekRange } from "@/lib/time";
 
 export async function getLeaderboard(
   groupId:string,
@@ -35,4 +36,140 @@ export async function getLeaderboard(
   }))
   .sort((a,b)=> b.score -a.score);
 
+}
+
+export async function getWeeklyDiscomfortStatus(
+  userId:string,
+  groupId:string,
+  date:string
+){
+  const {start,end} = getWeekRange(date);
+
+  const uncomfortableCount = await prisma.goal.count({
+    where:{
+      userId,
+      groupId,
+      isUncomfortable:true,
+      date:{
+        gte:start,
+        lte:end,
+      },
+    },
+  });
+  return {
+    required:1,
+    completed:uncomfortableCount,
+    atRisk:uncomfortableCount === 0,
+  };
+}
+
+export async function getExcuseStats(
+  userId:string,
+  groupId:string
+){
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate()-7);
+
+  const results = await prisma.goalResult.findMany({
+    where:{
+      goal:{
+        userId,
+        groupId,
+        date: {gte:since},
+      },
+      failureReason:{not:null},
+    },
+    select:{failureReason:true},
+  });
+
+  const stats: Record<string,number>= {};
+
+  for (const r of results){
+    const reason = r.failureReason!;
+    stats[reason] = (stats[reason] || 0) +1;
+  }
+
+  return stats;
+}
+
+export async function getUserDailyHistory(
+  userId:string,
+  groupId:string,
+  date:string
+){
+  const goals = await prisma.goal.findMany({
+    where:{
+      userId,
+      groupId,
+      date: new Date(date),
+    },
+    include:{
+      result:true,
+    },
+  });
+
+  return goals.map(g=> ({
+    goalId: g.id,
+    title:g.title,
+    isUncomfortable: g.isUncomfortable,
+    status: g.result?.failureReason ?? null,
+  }));
+}
+
+export async function getUserWeeklySummary(
+  userId:string,
+  groupId:string,
+  date:string,
+){
+  const {start,end} = getWeekRange(date);
+
+  const goals = await prisma.goal.findMany({
+    where:{
+      userId,
+      groupId,
+      date: {gte:start,lte:end},
+    },
+    include:{result:true},
+  });
+
+  let completed = 0;
+  let minEffort = 0;
+  let failed = 0 ;
+  let uncomfortableCount = 0 ;
+
+  for(const g of goals){
+    if(g.isUncomfortable) uncomfortableCount++;
+
+    if(!g.result) continue;
+    if(g.result.status === "COMPLETED") completed++;
+    if(g.result.status === "MIN_EFFORT") minEffort++;
+    if(g.result.status === "FAILED") failed++;
+  }
+
+  return {
+    completed,
+    minEffort,
+    failed,
+    uncomfortableCount,
+    discomfortAtRisk: uncomfortableCount === 0,
+  };
+}
+
+export async function getGroupMonthlyHistory(
+  groupId: string,
+  month: string
+) {
+  return prisma.monthlyOutcome.findMany({
+    where: { groupId, month },
+    orderBy: { rank: "asc" },
+    select: {
+      userId: true,
+      rank: true,
+      finalScore: true,
+      averageDailyScore: true,
+      activeDays: true,
+      payoutAmount: true,
+      penaltyAmount: true,
+    },
+  });
 }
