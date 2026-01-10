@@ -5,6 +5,7 @@
       "@god-complex/prisma": ["../../packages/prisma/src"]
     }
   },
+  "include": ["src/**/*"],
   "references": [
     { "path": "../../packages/prisma" }
   ]

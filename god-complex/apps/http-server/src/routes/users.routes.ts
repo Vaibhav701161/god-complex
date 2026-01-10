@@ -1,15 +1,16 @@
-import {Router} from "express";
-import {getMe} from "../services/user.service";
+import { Router } from "express";
+import { getMe } from "../services/user.service";
+import { requireAuth } from "../middleware/auth.middleware";
 
 const router = Router();
 
-// making a mock user for now
-
-router.get("/me", async (req,res) => {
-    const userId = "mock-user-id";
-    const user = await getMe(userId);
+router.get(
+  "/me",
+  requireAuth,
+  async (req, res) => {
+    const user = await getMe(req.user!.id);
     res.json(user);
-
-});
+  }
+);
 
 export default router;

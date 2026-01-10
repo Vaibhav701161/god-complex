@@ -1,23 +1,43 @@
-import {Router} from "express";
-import {submitCheckin, autoFailMissedCheckins} from "../services/checkin.service";
-import { runDailyFinalization } from "@/services/orchestration.service";
+import { Router } from "express";
+import { submitCheckin } from "../services/checkin.service";
+import { requireAuth } from "../middleware/auth.middleware";
+import { prisma } from "@god-complex/prisma";
+
 const router = Router();
 
-router.post("/",async(req,res) =>{
-
-    const userId = "mock-user-id";
-    await submitCheckin(userId,req.body);
+router.post(
+  "/",
+  requireAuth,
+  async (req, res) => {
+    await submitCheckin(req.user!.id, req.body);
     res.sendStatus(201);
-});
+  }
+);
+router.get(
+  "/status/:groupId/:date",
+  requireAuth,
+  async (req, res) => {
+    const { groupId, date } = req.params;
 
-router.post("/internal/auto-fail", async (req,res) =>{
-    await autoFailMissedCheckins(req.body.date);
-    res.sendStatus(200);
-});
+    const results = await prisma.goal.findMany({
+      where: {
+        userId: req.user!.id,
+        groupId,
+        date: new Date(date),
+      },
+      include: { result: true },
+    });
 
-router.post("/internal/finalize-day", async (_,res)=>{
-    await runDailyFinalization();
-    res.sendStatus(200);
-});
+    res.json(
+      results.map(g => ({
+        goalId: g.id,
+        status: g.result?.status ?? "NOT_CHECKED_IN",
+        failureReason: g.result?.failureReason ?? null,
+      }))
+    );
+  }
+);
+
+
 
 export default router;

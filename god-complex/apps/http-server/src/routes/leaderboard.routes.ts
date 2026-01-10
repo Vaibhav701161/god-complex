@@ -1,98 +1,118 @@
-import { request, Router } from "express";
-import { getLeaderboard, getUserDailyHistory, getUserWeeklySummary,getIntegrityBreakdown } from "../services/scoring.service";
+import { Router } from "express";
+import {
+  getLeaderboard,
+  getUserDailyHistory,
+  getUserWeeklySummary,
+  getIntegrityBreakdown,
+  getWeeklyDiscomfortStatus,
+  getExcuseStats,
+  getExcuseRiskLevel,
+} from "../services/scoring.service";
 import { getMonthlyResult } from "../services/monthly.service";
-import { getWeeklyDiscomfortStatus } from "../services/scoring.service";
-import { getExcuseStats } from "../services/scoring.service";
-import { GoalCategory } from "../../../../packages/prisma/generated/prisma/enums";
+import { requireAuth } from "../middleware/auth.middleware";
 
 const router = Router();
 
-
-router.get("/leaderboard/:groupId/:month", async (req, res) => {
-  const userId = "mock-user-id";
-  const leaderboard = await getLeaderboard(
-    req.params.groupId,
-    req.params.month,
-    userId
-  );
-  res.json(leaderboard);
-});
-
-
-router.get("/monthly/:groupId/:month", async (req, res) => {
-  const userId = "mock-user-id"; 
-  const result = await getMonthlyResult(
-    userId,
-    req.params.groupId,
-    req.params.month
-  );
-  res.json(result);
-});
-
 router.get(
-    "/:groupId/weekly-discomfort/:date",
-    async (req,res) => {
-        const userId = "user";
-        const {groupId,date} = request.params;
-
-        const status = await getWeeklyDiscomfortStatus(
-            userId,
-            groupId,
-            date,
-        );
-        res.json(status);
-    }
-);
-
-router.get("/:groupId/excuses", async (req,res)=>{
-    const userId = "mock-user-id";
-    const stats = await getExcuseStats(userId, req.params.groupId);
-    res.json(stats);
-});
-
-router.get(
-    "/:groupId/daily/:date",
-    async (req,res)=>{
-        const userId = "mock user";
-        const {groupId,date} = req.params;
-
-        const history = await getUserDailyHistory(
-            userId,
-            groupId,
-            date
-        );
-
-        res.json(history);
-    }
-);
-
-router.get(
-    "/:groupId/weekly/:date",
-    async(req,res) => {
-        const userId = "mock-user-id";
-        const {groupId,date} = req.params;
-
-        const summary = await getUserWeeklySummary(
-            userId,
-            groupId,
-            date
-        );
-
-        res.json(summary);
-    }
-);
-
-router.get(
-  "/:groupId/integrity",
+  "/leaderboard/:groupId/:month",
+  requireAuth,
   async (req, res) => {
-    const userId = "mock-user-id";
-    const stats = await getIntegrityBreakdown(
-      userId,
+    const leaderboard = await getLeaderboard(
+      req.params.groupId,
+      req.params.month,
+      req.user!.id
+    );
+    res.json(leaderboard);
+  }
+);
+
+router.get(
+  "/monthly/:groupId/:month",
+  requireAuth,
+  async (req, res) => {
+    const result = await getMonthlyResult(
+      req.user!.id,
+      req.params.groupId,
+      req.params.month
+    );
+    res.json(result);
+  }
+);
+
+router.get(
+  "/:groupId/weekly-discomfort/:date",
+  requireAuth,
+  async (req, res) => {
+    const status = await getWeeklyDiscomfortStatus(
+      req.user!.id,
+      req.params.groupId,
+      req.params.date
+    );
+    res.json(status);
+  }
+);
+
+router.get(
+  "/:groupId/excuses",
+  requireAuth,
+  async (req, res) => {
+    const stats = await getExcuseStats(
+      req.user!.id,
       req.params.groupId
     );
     res.json(stats);
   }
 );
 
+router.get(
+  "/:groupId/excuse-risk",
+  requireAuth,
+  async (req, res) => {
+    const risk = await getExcuseRiskLevel(
+      req.user!.id,
+      req.params.groupId
+    );
+    res.json(risk);
+  }
+);
+
+
+router.get(
+  "/:groupId/daily/:date",
+  requireAuth,
+  async (req, res) => {
+    const history = await getUserDailyHistory(
+      req.user!.id,
+      req.params.groupId,
+      req.params.date
+    );
+    res.json(history);
+  }
+);
+
+router.get(
+  "/:groupId/weekly/:date",
+  requireAuth,
+  async (req, res) => {
+    const summary = await getUserWeeklySummary(
+      req.user!.id,
+      req.params.groupId,
+      req.params.date
+    );
+    res.json(summary);
+  }
+);
+
+router.get(
+  "/:groupId/integrity",
+  requireAuth,
+  async (req, res) => {
+    const stats = await getIntegrityBreakdown(
+      req.user!.id,
+      req.params.groupId
+    );
+    res.json(stats);
+  }
+);
 
 export default router;

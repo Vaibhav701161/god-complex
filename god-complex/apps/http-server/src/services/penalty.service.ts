@@ -47,3 +47,20 @@ export async function autoFailOverduePenalties(){
   });
 }
 
+export async function getPenaltyConsequences(
+  userId: string,
+  groupId: string
+) {
+  const failed = await prisma.penaltyAssignment.count({
+    where: { userId, groupId, status: "FAILED" },
+  });
+
+  return {
+    canJoinNextMonth: failed === 0,
+    failedCount: failed,
+    message:
+      failed === 0
+        ? "You are in good standing"
+        : "Clear failed penalties to rejoin",
+  };
+}

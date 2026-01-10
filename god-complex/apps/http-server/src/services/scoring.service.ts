@@ -290,3 +290,30 @@ export async function computeCurrentMonthScores(groupId: string) {
 
   return scores.sort((a, b) => b.score - a.score);
 }
+export async function getExcuseRiskLevel(
+  userId: string,
+  groupId: string
+) {
+  const stats = await getExcuseStats(userId, groupId);
+  const maxCount = Math.max(0, ...Object.values(stats));
+
+  return {
+    riskLevel:
+      maxCount >= 2 ? "CRITICAL" :
+      maxCount === 1 ? "WARNING" :
+      "SAFE",
+  };
+}
+
+export async function getCurrentMonthProjection(
+  userId: string,
+  groupId: string
+) {
+  const leaderboard = await getLeaderboard(
+    groupId,
+    new Date().toISOString().slice(0, 7),
+    userId
+  );
+
+  return leaderboard.find(l => l.userId === userId);
+}
