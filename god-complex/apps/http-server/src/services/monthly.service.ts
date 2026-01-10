@@ -1,12 +1,16 @@
-import {prisma} from "@god-complex/prisma";
+import { prisma } from "@god-complex/prisma";
 import { assertMembership } from "@/lib/guards";
 
-export async function getMonthlyResult(userId:string ,groupId: string, month: string) {
-  await assertMembership(userId,groupId,month);
+export async function getMonthlyResult(
+  userId: string,
+  groupId: string,
+  month: string
+) {
+  await assertMembership(userId, groupId, month);
 
   const outcome = await prisma.monthlyOutcome.findUnique({
-    where:{
-      userId_groupId_month:{
+    where: {
+      userId_groupId_month: {
         userId,
         month,
         groupId,
@@ -30,52 +34,78 @@ export async function getMonthlyResult(userId:string ,groupId: string, month: st
   };
 }
 
-export async function closeMonth(groupId:string,month:string){
-  const existing =await prisma.monthlyOutcome.findFirst({
-    where:{groupId,month},
+export async function closeMonth(groupId: string, month: string) {
+  const existing = await prisma.monthlyOutcome.findFirst({
+    where: { groupId, month },
   });
 
-  if(existing){
+  if (existing) {
     throw new Error("month already closed");
   }
 
- const goals = await prisma.goal.findMany({
-  where:{
-    groupId,
-    date:{
-      gte: new Date(`${month}-01`),
-      lt:new Date(`${month}-31`),
+  const goals = await prisma.goal.findMany({
+    where: {
+      groupId,
+      date: {
+        gte: new Date(`${month}-01`),
+        lt: new Date(`${month}-31`),
+      },
     },
-  },
-  include :{result:true},
- });
+    include: { result: true },
+  });
 
- const userDayMap: Record<string, Record<string, number>> = {};
+  const weeklyUncomfortableFailures = new Set<string>();
+  const weeks = new Map<string, Map<string, number>>();
 
-for (const g of goals) {
-  if (!g.result) continue;
 
-  if (!userDayMap[g.userId]) {
-    userDayMap[g.userId] = {};
+  for (const g of goals) {
+    const weekKey = g.date.toISOString().slice(0, 10); 
+    if (!weeks.has(g.userId)) {
+      weeks.set(g.userId, new Map());
+    }
+    const userWeeks = weeks.get(g.userId)!;
+    if (!userWeeks.has(weekKey)) {
+      userWeeks.set(weekKey, 0);
+    }
+    if (g.isUncomfortable) {
+      userWeeks.set(weekKey, userWeeks.get(weekKey)! + 1);
+    }
   }
 
-  const day = g.date.toISOString().split("T")[0];
-
-  if (!userDayMap[g.userId][day]) {
-    userDayMap[g.userId][day] = 0;
+  for (const [userId, weekMap] of Array.from(weeks.entries())) {
+    for (const count of Array.from(weekMap.values())) {
+      if (count === 0) {
+        weeklyUncomfortableFailures.add(userId);
+        break;
+      }
+    }
   }
 
-  if (g.result.status === "COMPLETED") {
-    userDayMap[g.userId][day] += 1;
+  const userDayMap: Record<string, Record<string, number>> = {};
+
+  for (const g of goals) {
+    if (!g.result) continue;
+
+    if (!userDayMap[g.userId]) {
+      userDayMap[g.userId] = {};
+    }
+
+    const day = g.date.toISOString().split("T")[0];
+
+    if (!userDayMap[g.userId][day]) {
+      userDayMap[g.userId][day] = 0;
+    }
+
+    if (g.result.status === "COMPLETED") {
+      userDayMap[g.userId][day] += 1;
+    }
+
+    if (g.result.status === "MIN_EFFORT") {
+      userDayMap[g.userId][day] += 0.5;
+    }
   }
 
-  if (g.result.status === "MIN_EFFORT") {
-    userDayMap[g.userId][day] += 0.5;
-  }
-}
-
-const finalScores = Object.entries(userDayMap).map(
-  ([userId, days]) => {
+  const finalScores = Object.entries(userDayMap).map(([userId, days]) => {
     const dailyScores = Object.values(days);
     const activeDays = dailyScores.length;
 
@@ -88,12 +118,17 @@ const finalScores = Object.entries(userDayMap).map(
       averageDailyScore,
       activeDays,
     };
-  }
-);
+  });
 
-const ranked = finalScores.sort(
-  (a, b) => b.finalScore - a.finalScore
-);
+  
+  for (const user of finalScores) {
+    if (weeklyUncomfortableFailures.has(user.userId)) {
+      user.finalScore = 0;
+    }
+  }
+
+  
+  const ranked = finalScores.sort((a, b) => b.finalScore - a.finalScore);
 
   await prisma.$transaction(
     ranked.map((userScore, index) =>
@@ -114,4 +149,3 @@ const ranked = finalScores.sort(
     )
   );
 }
-

@@ -39,6 +39,15 @@ export async function submitCheckin(
     throw new Error("All goals must be checked in");
   }
 
+  for(const r of results){
+    const goal = goals.find(g=> g.id === r.goalId); 
+    
+  if (!goal){
+    throw new Error("Goal does not belong to this dayor user");
+  } 
+  }
+
+
   const existingResult = await prisma.goalResult.findMany({
     where: {
       goalId: { in: results.map(r => r.goalId) }
