@@ -173,3 +173,120 @@ export async function getGroupMonthlyHistory(
     },
   });
 }
+
+export async function getIntegrityBreakdown(
+  userId: string,
+  groupId: string
+) {
+  const goals = await prisma.goal.findMany({
+    where: { userId, groupId },
+    include: { result: true },
+  });
+
+  let missedCheckins = 0;
+  let failedGoals = 0;
+
+  for (const g of goals) {
+    if (!g.result) missedCheckins++;
+    else if (g.result.status === "FAILED") failedGoals++;
+  }
+
+  return {
+    missedCheckins,
+    failedGoals,
+  };
+}
+
+export async function computeCurrentMonthScores(groupId: string) {
+  const now = new Date().toISOString().slice(0, 7); // "2025-01"
+  
+  const goals = await prisma.goal.findMany({
+    where: {
+      groupId,
+      date: {
+        gte: new Date(`${now}-01`),
+        lt: new Date(`${now}-31`), 
+      },
+    },
+    include: { result: true },
+  });
+
+  
+  const weeklyUncomfortableFailures = new Set<string>();
+  const weeks = new Map<string, Map<string, number>>();
+
+  for (const g of goals) {
+    const weekKey = g.date.toISOString().slice(0, 10);
+    if (!weeks.has(g.userId)) {
+      weeks.set(g.userId, new Map());
+    }
+    const userWeeks = weeks.get(g.userId)!;
+    if (!userWeeks.has(weekKey)) {
+      userWeeks.set(weekKey, 0);
+    }
+    if (g.isUncomfortable) {
+      userWeeks.set(weekKey, userWeeks.get(weekKey)! + 1);
+    }
+  }
+
+ 
+  weeks.forEach((weekMap, userId) => {
+    const counts = Array.from(weekMap.values());
+    for (const count of counts) {
+      if (count === 0) {
+        weeklyUncomfortableFailures.add(userId);
+        break;
+      }
+    }
+  });
+
+  
+  const userDayMap: Record<string, Record<string, number>> = {};
+  
+  for (const g of goals) {
+    if (!g.result) continue;
+    
+    if (!userDayMap[g.userId]) {
+      userDayMap[g.userId] = {};
+    }
+    
+    const day = g.date.toISOString().split("T")[0];
+    
+    if (!userDayMap[g.userId][day]) {
+      userDayMap[g.userId][day] = 0;
+    }
+    
+    if (g.result.status === "COMPLETED") {
+      userDayMap[g.userId][day] += 1;
+    }
+    
+    if (g.result.status === "MIN_EFFORT") {
+      userDayMap[g.userId][day] += 0.5;
+    }
+  }
+
+ 
+  const scores = Object.entries(userDayMap).map(([userId, days]) => {
+    const dailyScores = Object.values(days);
+    const activeDays = dailyScores.length;
+    const averageDailyScore = activeDays > 0 
+      ? dailyScores.reduce((a, b) => a + b, 0) / activeDays 
+      : 0;
+    
+    let finalScore = averageDailyScore * activeDays;
+
+    
+    if (weeklyUncomfortableFailures.has(userId)) {
+      finalScore = 0;
+    }
+
+    return {
+      userId,
+      score: finalScore,
+      averageDailyScore,
+      activeDays,
+    };
+  });
+
+  return scores.sort((a, b) => b.score - a.score);
+}

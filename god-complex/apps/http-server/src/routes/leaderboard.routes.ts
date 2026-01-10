@@ -1,5 +1,5 @@
 import { request, Router } from "express";
-import { getLeaderboard, getUserDailyHistory, getUserWeeklySummary } from "../services/scoring.service";
+import { getLeaderboard, getUserDailyHistory, getUserWeeklySummary,getIntegrityBreakdown } from "../services/scoring.service";
 import { getMonthlyResult } from "../services/monthly.service";
 import { getWeeklyDiscomfortStatus } from "../services/scoring.service";
 import { getExcuseStats } from "../services/scoring.service";
@@ -82,6 +82,17 @@ router.get(
     }
 );
 
+router.get(
+  "/:groupId/integrity",
+  async (req, res) => {
+    const userId = "mock-user-id";
+    const stats = await getIntegrityBreakdown(
+      userId,
+      req.params.groupId
+    );
+    res.json(stats);
+  }
+);
 
 
 export default router;
