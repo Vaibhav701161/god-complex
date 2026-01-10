@@ -33,7 +33,7 @@ export async function assignMonthlyPenalties(
   }
 }
 
-export async function autoFailOverDuePenalties(){
+export async function autoFailOverduePenalties(){
   const now = new Date();
 
   await prisma.penaltyAssignment.updateMany({
