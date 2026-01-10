@@ -1,5 +1,7 @@
 import { prisma } from "@god-complex/prisma";
 import { assertMembership } from "@/lib/guards";
+import { assignMonthlyPenalties } from "./penalty.service";
+
 
 export async function getMonthlyResult(
   userId: string,
@@ -148,4 +150,11 @@ export async function closeMonth(groupId: string, month: string) {
       })
     )
   );
+const rankingsWithRank = ranked.map((user, index) => ({
+    userId: user.userId,
+    rank: index + 1,
+  }));
+
+  await assignMonthlyPenalties(groupId, month, rankingsWithRank);
+
 }

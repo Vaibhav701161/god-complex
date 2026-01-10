@@ -47,6 +47,7 @@ model User {
   goals           Goal[]
   goalResults     GoalResult[]
   monthlyOutcomes MonthlyOutcome[]
+  penaltyAssignments PenaltyAssignment[]
 }
 
 model Group {
@@ -59,6 +60,7 @@ model Group {
   memberships     Membership[]
   goals           Goal[]
   monthlyOutcomes MonthlyOutcome[]
+  penaltyAssignments PenaltyAssignment[]
 }
 
 
@@ -132,4 +134,24 @@ model MonthlyOutcome {
   group             Group    @relation(fields: [groupId], references: [id])
 
   @@unique([userId, groupId, month])
+}
+
+model PenaltyAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  groupId     String
+  month       String
+
+  penaltyType String
+  dueDate     DateTime
+  status      String   @default("PENDING") // PENDING | COMPLETED | FAILED
+
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+
+  user        User     @relation(fields: [userId], references: [id])
+  group       Group    @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId, month])
+  @@index([status])
 }
