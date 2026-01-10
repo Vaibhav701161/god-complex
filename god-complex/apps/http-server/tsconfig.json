@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@god-complex/prisma": ["../../packages/prisma/src"]
+    }
+  },
+  "references": [
+    { "path": "../../packages/prisma" }
+  ]
+}

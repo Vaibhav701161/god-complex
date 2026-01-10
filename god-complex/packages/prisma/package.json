@@ -1,16 +1,25 @@
 {
-  "name": "prisma",
+  "name": "@god-complex/prisma",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+ "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*"
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "@types/pg": "^8.16.0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.2.0",
+    "@prisma/client": "^7.2.0",
+    "pg": "^8.16.3",
     "prisma": "^7.2.0"
   }
 }
