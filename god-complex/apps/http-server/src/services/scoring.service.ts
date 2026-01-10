@@ -1,6 +1,12 @@
 import {prisma} from "@god-complex/prisma";
+import { assertMembership } from "@/lib/guards";
 
-export async function getLeaderboard(groupId:string){
+export async function getLeaderboard(
+  groupId:string,
+  userId:string,
+  month:string
+){
+  await assertMembership(userId, groupId, month);
   const goals = await prisma.goal.findMany({
     where: {groupId},
     include: {result:true},

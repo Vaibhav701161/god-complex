@@ -1,16 +1,17 @@
-import {prisma} from "@god-complex/prisma";
-import {getMonth,getWeekRange,isBeforeCutoff} from "../lib/time";
+import { prisma } from "@god-complex/prisma";
+import { getMonth, getWeekRange, isBeforeCutoff } from "../lib/time";
+import { assertMembership } from "../lib/guards";
 
-interface DailyGoalInput{
-    groupId:string,
-    date: string,
-    goals: {
-        title:string;
-        category:any;
-        finishCondition: string;
-        minEffort:string;
-        isUncomfortable:boolean;
-    }[];
+interface DailyGoalInput {
+  groupId: string;
+  date: string;
+  goals: {
+    title: string;
+    category: any;
+    finishCondition: string;
+    minEffort: string;
+    isUncomfortable: boolean;
+  }[];
 }
 
 export async function submitDailyGoals(
@@ -19,13 +20,11 @@ export async function submitDailyGoals(
 ) {
   const { groupId, date, goals } = data;
 
-  
-  const group = await prisma.group.findUnique({where:{id:groupId}});
-  if(!group) throw new Error("Group not found");
-  if(!isBeforeCutoff(group.cutoffHour)){
+  const group = await prisma.group.findUnique({ where: { id: groupId } });
+  if (!group) throw new Error("Group not found");
+  if (!isBeforeCutoff(group.cutoffHour)) {
     throw new Error("Daily goal cutoff passed");
   }
-
 
   if (goals.length === 0) {
     throw new Error("At least one goal required");
@@ -34,40 +33,30 @@ export async function submitDailyGoals(
   const month = getMonth(date);
 
   
-  const membership = await prisma.membership.findUnique({
+  await assertMembership(userId, groupId, month);
+
+
+  const { start, end } = await getWeekRange(date);
+
+  const UncomfortableCount = await prisma.goal.count({
     where: {
-      userId_groupId_month: {
-        userId,
-        groupId,
-        month,
+      userId,
+      groupId,
+      isUncomfortable: true,
+      date: {
+        gte: start,
+        lte: end,
       },
     },
   });
 
-  if (!membership) {
-    throw new Error("User not a member for this month");
+  const submittingUncomfortable = goals.some((g) => g.isUncomfortable);
+  if (UncomfortableCount === 0 && !submittingUncomfortable) {
+    throw new Error(
+      "You must set at least one uncomfortable goal this week to maintain accountability"
+    );
   }
 
-  const {start,end} = await getWeekRange(date);
-
-  const UncomfortableCount = await prisma.goal.count({
-    where:{
-        userId,
-        groupId,
-        isUncomfortable:true,
-        date: {
-            gte : start,
-            lte:end,
-        },
-    },
-  });
-
-  const submittingUncomfortable = goals.some(g => g.isUncomfortable);
-  if(UncomfortableCount === 0 && !submittingUncomfortable){
-    throw new Error("You must set at least one uncomfortable goal this week to maintain accountability");
-  }
-
-  
   const existingGoals = await prisma.goal.findFirst({
     where: { userId, groupId, date: new Date(date) },
   });
@@ -76,7 +65,6 @@ export async function submitDailyGoals(
     throw new Error("Goals already submitted for this day");
   }
 
-  
   await prisma.$transaction(
     goals.map((g) =>
       prisma.goal.create({
@@ -94,6 +82,7 @@ export async function submitDailyGoals(
     )
   );
 }
-export async function getDailyGoals(groupId:string, date: string){
-    return[];
+
+export async function getDailyGoals(groupId: string, date: string) {
+  return [];
 }

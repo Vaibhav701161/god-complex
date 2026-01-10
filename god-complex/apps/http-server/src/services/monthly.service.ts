@@ -1,4 +1,34 @@
 import {prisma} from "@god-complex/prisma";
+import { assertMembership } from "@/lib/guards";
+
+export async function getMonthlyResult(userId:string ,groupId: string, month: string) {
+  await assertMembership(userId,groupId,month);
+
+  const outcome = await prisma.monthlyOutcome.findUnique({
+    where:{
+      userId_groupId_month:{
+        userId,
+        month,
+        groupId,
+      },
+    },
+  });
+  const allOutcomes = await prisma.monthlyOutcome.findMany({
+    where: {
+      groupId,
+      month,
+    },
+    orderBy: {
+      rank: "asc",
+    },
+  });
+
+  return {
+    userOutcome: outcome,
+    totalParticipants: allOutcomes.length,
+    allRankings: allOutcomes,
+  };
+}
 
 export async function closeMonth(groupId:string,month:string){
   const existing =await prisma.monthlyOutcome.findFirst({
@@ -85,6 +115,3 @@ const ranked = finalScores.sort(
   );
 }
 
-export async function getMonthlyResult(groupId: string, month: string) {
-  return [];
-}

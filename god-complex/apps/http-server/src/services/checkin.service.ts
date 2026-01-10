@@ -1,5 +1,7 @@
 import { prisma } from "@god-complex/prisma";
 import { FailureReason } from "../../../../packages/prisma/generated/prisma/enums";
+import { assertMembership } from "@/lib/guards";
+import { getMonth } from "@/lib/time";
 
 interface CheckinInput {
   groupId: string;
@@ -15,7 +17,11 @@ export async function submitCheckin(
   userId: string,
   data: CheckinInput
 ) {
+  
   const { groupId, date, results } = data;
+
+  const month = getMonth(date);
+  await assertMembership(userId,groupId,month);
 
   const goals = await prisma.goal.findMany({
     where: {
