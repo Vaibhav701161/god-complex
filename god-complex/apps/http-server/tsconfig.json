@@ -1,12 +1,27 @@
 {
   "compilerOptions": {
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "outDir": "./build",
+    "rootDir": "./src",
     "paths": {
-      "@/*": ["./src/*"],
-      "@god-complex/prisma": ["../../packages/prisma/src"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@god-complex/prisma": [
+        "../../packages/prisma/src"
+      ]
     }
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*"
+  ],
   "references": [
-    { "path": "../../packages/prisma" }
+    {
+      "path": "../../packages/prisma"
+    }
   ]
 }

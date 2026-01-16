@@ -1,12 +1,14 @@
 import { betterAuth } from "better-auth";
-import { prisma } from "@god-complex/prisma"; // Assuming this is your adapter path
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { prisma } from "@god-complex/prisma";
 
 export const auth = betterAuth({
-  database: prisma,
+  database: prismaAdapter(prisma, {
+    provider: "postgresql",
+  }),
   emailAndPassword: { enabled: true },
   session: {
-    
     expiresIn: 60 * 60 * 24 * 7,
-    freshAge: 60 * 60 * 24,    
+    freshAge: 60 * 60 * 24,
   },
 });
