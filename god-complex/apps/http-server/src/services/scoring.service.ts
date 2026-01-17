@@ -1,149 +1,166 @@
-import {prisma} from "@god-complex/prisma";
+import { prisma } from "@god-complex/prisma";
 import { assertMembership } from "@/lib/guards";
 import { getWeekRange } from "@/lib/time";
 
 export async function getLeaderboard(
-  groupId:string,
-  userId:string,
-  month:string
-){
+  groupId: string,
+  userId: string,
+  month: string
+) {
   await assertMembership(userId, groupId, month);
-  const goals = await prisma.goal.findMany({
-    where: {groupId},
-    include: {result:true},
+
+  // INVARIANT CHECK: If month is closed, return immutable stored outcome.
+  // We do not recompute past months.
+  const storedOutcomes = await prisma.monthlyOutcome.findMany({
+    where: { groupId, month },
+    orderBy: { finalScore: 'desc' }
   });
 
-  const userScores: Record<string, {total:number;days:number}> = {};
+  if (storedOutcomes.length > 0) {
+    return storedOutcomes.map(o => ({
+      userId: o.userId,
+      score: o.finalScore, // This is the "Effective Score" (avg * activeDays)
+      // Note: partial match to return type. The caller expects {userId, score}.
+      // If client needs breakdown, they should use getMonthlyResult.
+    }));
+  }
 
-  for (const g of goals){
-    if(!userScores[g.userId]){
-      userScores[g.userId] = {total: 0, days: 0};
+  const goals = await prisma.goal.findMany({
+    where: { groupId },
+    include: { result: true },
+  });
+
+  const userScores: Record<string, { total: number; days: number }> = {};
+
+  for (const g of goals) {
+    if (!userScores[g.userId]) {
+      userScores[g.userId] = { total: 0, days: 0 };
     }
 
-    if(g.result){
+    if (g.result) {
       let score = 0;
-      if(g.result.status === "COMPLETED") score =1;
-      if(g.result.status === "MIN_EFFORT") score= 0.5;
-      userScores[g.userId].total +=score;
+      if (g.result.status === "COMPLETED") score = 1;
+      if (g.result.status === "MIN_EFFORT") score = 0.5;
+      userScores[g.userId].total += score;
       userScores[g.userId].days += 1;
     }
   }
 
   return Object.entries(userScores)
-  .map(([userId , s]) =>({
-    userId,
-    score: s.total / Math.max(s.days,1),
-  }))
-  .sort((a,b)=> b.score -a.score);
+    .map(([userId, s]) => ({
+      userId,
+      score: s.total / Math.max(s.days, 1),
+    }))
+    .sort((a, b) => b.score - a.score);
 
 }
 
 export async function getWeeklyDiscomfortStatus(
-  userId:string,
-  groupId:string,
-  date:string
-){
-  const {start,end} = getWeekRange(date);
+  userId: string,
+  groupId: string,
+  date: string
+) {
+  const { start, end } = getWeekRange(date);
 
   const uncomfortableCount = await prisma.goal.count({
-    where:{
+    where: {
       userId,
       groupId,
-      isUncomfortable:true,
-      date:{
-        gte:start,
-        lte:end,
+      isUncomfortable: true,
+      date: {
+        gte: start,
+        lte: end,
       },
     },
   });
   return {
-    required:1,
-    completed:uncomfortableCount,
-    atRisk:uncomfortableCount === 0,
+    required: 1,
+    completed: uncomfortableCount,
+    atRisk: uncomfortableCount === 0,
   };
 }
 
 export async function getExcuseStats(
-  userId:string,
-  groupId:string
-){
+  userId: string,
+  groupId: string
+) {
   const since = new Date();
-  since.setUTCDate(since.getUTCDate()-7);
+  since.setUTCDate(since.getUTCDate() - 7);
 
   const results = await prisma.goalResult.findMany({
-    where:{
-      goal:{
+    where: {
+      goal: {
         userId,
         groupId,
-        date: {gte:since},
+        date: { gte: since },
       },
-      failureReason:{not:null},
+      failureReason: { not: null },
     },
-    select:{failureReason:true},
+    select: { failureReason: true },
   });
 
-  const stats: Record<string,number>= {};
+  const stats: Record<string, number> = {};
 
-  for (const r of results){
+  for (const r of results) {
     const reason = r.failureReason!;
-    stats[reason] = (stats[reason] || 0) +1;
+    stats[reason] = (stats[reason] || 0) + 1;
   }
 
   return stats;
 }
 
 export async function getUserDailyHistory(
-  userId:string,
-  groupId:string,
-  date:string
-){
+  userId: string,
+  groupId: string,
+  date: string
+) {
   const goals = await prisma.goal.findMany({
-    where:{
+    where: {
       userId,
       groupId,
       date: new Date(date),
     },
-    include:{
-      result:true,
+    include: {
+      result: true,
     },
   });
 
-  return goals.map(g=> ({
+  return goals.map(g => ({
     goalId: g.id,
-    title:g.title,
+    title: g.title,
     isUncomfortable: g.isUncomfortable,
     status: g.result?.failureReason ?? null,
   }));
 }
 
 export async function getUserWeeklySummary(
-  userId:string,
-  groupId:string,
-  date:string,
-){
-  const {start,end} = getWeekRange(date);
+  userId: string,
+  groupId: string,
+  date: string,
+) {
+  const { start, end } = getWeekRange(date);
 
   const goals = await prisma.goal.findMany({
-    where:{
+    where: {
       userId,
       groupId,
-      date: {gte:start,lte:end},
+      date: { gte: start, lte: end },
     },
-    include:{result:true},
+    include: { result: true },
   });
 
   let completed = 0;
   let minEffort = 0;
-  let failed = 0 ;
-  let uncomfortableCount = 0 ;
+  let failed = 0;
+  let uncomfortableCount = 0;
 
-  for(const g of goals){
-    if(g.isUncomfortable) uncomfortableCount++;
+  for (const g of goals) {
+    if (g.isUncomfortable) uncomfortableCount++;
 
-    if(!g.result) continue;
-    if(g.result.status === "COMPLETED") completed++;
-    if(g.result.status === "MIN_EFFORT") minEffort++;
-    if(g.result.status === "FAILED") failed++;
+    if (!g.result) continue;
+    if (g.result.status === "COMPLETED") completed++;
+    if (g.result.status === "MIN_EFFORT") minEffort++;
+    if (g.result.status === "FAILED") failed++;
   }
 
   return {
@@ -199,19 +216,19 @@ export async function getIntegrityBreakdown(
 
 export async function computeCurrentMonthScores(groupId: string) {
   const now = new Date().toISOString().slice(0, 7); // "2025-01"
-  
+
   const goals = await prisma.goal.findMany({
     where: {
       groupId,
       date: {
         gte: new Date(`${now}-01`),
-        lt: new Date(`${now}-31`), 
+        lt: new Date(`${now}-31`),
       },
     },
     include: { result: true },
   });
 
-  
+
   const weeklyUncomfortableFailures = new Set<string>();
   const weeks = new Map<string, Map<string, number>>();
 
@@ -229,7 +246,7 @@ export async function computeCurrentMonthScores(groupId: string) {
     }
   }
 
- 
+
   weeks.forEach((weekMap, userId) => {
     const counts = Array.from(weekMap.values());
     for (const count of counts) {
@@ -240,42 +257,42 @@ export async function computeCurrentMonthScores(groupId: string) {
     }
   });
 
-  
+
   const userDayMap: Record<string, Record<string, number>> = {};
-  
+
   for (const g of goals) {
     if (!g.result) continue;
-    
+
     if (!userDayMap[g.userId]) {
       userDayMap[g.userId] = {};
     }
-    
+
     const day = g.date.toISOString().split("T")[0];
-    
+
     if (!userDayMap[g.userId][day]) {
       userDayMap[g.userId][day] = 0;
     }
-    
+
     if (g.result.status === "COMPLETED") {
       userDayMap[g.userId][day] += 1;
     }
-    
+
     if (g.result.status === "MIN_EFFORT") {
       userDayMap[g.userId][day] += 0.5;
     }
   }
 
- 
+
   const scores = Object.entries(userDayMap).map(([userId, days]) => {
     const dailyScores = Object.values(days);
     const activeDays = dailyScores.length;
-    const averageDailyScore = activeDays > 0 
-      ? dailyScores.reduce((a, b) => a + b, 0) / activeDays 
+    const averageDailyScore = activeDays > 0
+      ? dailyScores.reduce((a, b) => a + b, 0) / activeDays
       : 0;
-    
+
     let finalScore = averageDailyScore * activeDays;
 
-    
+
     if (weeklyUncomfortableFailures.has(userId)) {
       finalScore = 0;
     }
@@ -300,8 +317,8 @@ export async function getExcuseRiskLevel(
   return {
     riskLevel:
       maxCount >= 2 ? "CRITICAL" :
-      maxCount === 1 ? "WARNING" :
-      "SAFE",
+        maxCount === 1 ? "WARNING" :
+          "SAFE",
   };
 }
 

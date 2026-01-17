@@ -1,4 +1,4 @@
-import {Router} from "express";
+import { Router } from "express";
 
 import userRoutes from "./users.routes";
 import groupRoutes from "./groups.routes";
@@ -6,6 +6,8 @@ import goalRoutes from "./goals.routes";
 import leaderboardRoutes from "./leaderboard.routes";
 import checkinRoutes from "./checkin.routes";
 import monthlyRoutes from "./monthly.routes";
+
+import adminRoutes from "./admin.routes";
 
 const router = Router();
 
@@ -15,5 +17,6 @@ router.use("/daily-goals", goalRoutes);
 router.use("/daily-checkin", checkinRoutes);
 router.use("/leaderboard", leaderboardRoutes);
 router.use("/monthly", monthlyRoutes);
+router.use("/admin", adminRoutes);
 
 export default router;

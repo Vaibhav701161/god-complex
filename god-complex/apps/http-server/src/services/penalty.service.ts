@@ -2,6 +2,7 @@ import { prisma } from "@god-complex/prisma";
 import { PenaltyType, PENALTY_DEFINITIONS } from "../lib/penalties";
 
 export async function assignMonthlyPenalties(
+  tx: any,
   groupId: string,
   month: string,
   ranked: Array<{ userId: string; rank: number }>
@@ -13,7 +14,7 @@ export async function assignMonthlyPenalties(
   for (const loser of losers) {
     const penaltyTypes = Object.values(PenaltyType);
 
-   
+
     const index = loser.rank % penaltyTypes.length;
     const penaltyType = penaltyTypes[index];
     const definition = PENALTY_DEFINITIONS[penaltyType];
@@ -21,7 +22,7 @@ export async function assignMonthlyPenalties(
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + definition.dueInDays);
 
-    await prisma.penaltyAssignment.create({
+    await tx.penaltyAssignment.create({
       data: {
         userId: loser.userId,
         groupId,
@@ -33,7 +34,7 @@ export async function assignMonthlyPenalties(
   }
 }
 
-export async function autoFailOverduePenalties(){
+export async function autoFailOverduePenalties() {
   const now = new Date();
 
   await prisma.penaltyAssignment.updateMany({

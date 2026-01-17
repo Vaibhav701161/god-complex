@@ -109,6 +109,11 @@ model Group {
   cutoffHour      Int      
   createdAt       DateTime @default(now())
 
+  timezone        String   @default("UTC")
+  
+  dailyFinalizations DailyFinalization[]
+  auditLogs       AuditLog[]
+  
   memberships     Membership[]
   goals           Goal[]
   monthlyOutcomes MonthlyOutcome[]
@@ -139,6 +144,7 @@ model Goal {
   finishCondition String
   minEffort       String
   isUncomfortable Boolean
+  isLocked        Boolean @default(false)
 
   createdAt       DateTime @default(now())
 
@@ -165,6 +171,10 @@ model GoalResult {
 
 
 
+
+// INVARIANT: Immutable once created. 
+// No write path may change user-visible rank, score, or loser status for that month, 
+// except via an explicit ADMIN action with REVERSED verdict and full audit context.
 model MonthlyOutcome {
   id                String   @id @default(uuid())
   userId            String
@@ -196,7 +206,11 @@ model PenaltyAssignment {
 
   penaltyType String
   dueDate     DateTime
-  status      String   @default("PENDING") // PENDING | COMPLETED | FAILED
+  status      PenaltyStatus   @default(PENDING)
+  appealReason    String?
+  resolutionNotes String?
+  verdict         PenaltyVerdict? // NULL = Pending/None, UPHELD, REVERSED
+  resolvedAt      DateTime?
 
   createdAt   DateTime @default(now())
   completedAt DateTime?
@@ -206,4 +220,72 @@ model PenaltyAssignment {
 
   @@unique([userId, groupId, month])
   @@index([status])
+}
+
+model DailyFinalization {
+  id          String   @id @default(uuid())
+  groupId     String
+  date        String   // "YYYY-MM-DD" in Group Time
+  
+  dayStartUTC DateTime
+  dayEndUTC   DateTime
+  cutoffUTC   DateTime
+  
+  status      DayStatus @default(PENDING)
+  
+  finalizedAt DateTime?
+  metadata    Json?
+  
+  group       Group     @relation(fields: [groupId], references: [id])
+  
+  @@unique([groupId, date])
+  @@index([status])
+  @@map("daily_finalization")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  actorId     String?
+  
+  targetId    String
+  targetType  String
+  
+  changes     Json?
+  createdAt   DateTime @default(now())
+  
+  source      AuditSource @default(SYSTEM)
+  reason      String?
+  correlationId String?
+  
+  groupId     String?
+  group       Group?   @relation(fields: [groupId], references: [id])
+
+  @@map("audit_log")
+}
+
+enum AuditSource {
+  SYSTEM
+  CRON
+  ADMIN
+  USER
+}
+
+enum DayStatus {
+  PENDING
+  FINALIZED
+  RECONCILED
+}
+
+enum PenaltyStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  APPEALED
+  RESOLVED
+}
+
+enum PenaltyVerdict {
+  UPHELD
+  REVERSED
 }
