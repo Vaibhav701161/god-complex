@@ -4,6 +4,7 @@ import { GCLogo } from "@/components/IsometricCube";
 import { ScoringGraph } from "@/components/ScoringGraph";
 import { Header } from "@/components/Header";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function Home() {
     return (
@@ -388,30 +389,32 @@ export default function Home() {
                         </div>
 
                         {/* CTA Button - with strong glow */}
-                        <motion.button
-                            className="w-full bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white font-bold py-6 px-10 rounded-2xl text-lg md:text-xl tracking-widest shadow-[0_0_50px_-10px_rgba(59,130,246,0.8)] hover:shadow-[0_0_70px_-5px_rgba(59,130,246,1)] transition-all duration-300"
-                            whileHover={{ scale: 1.02, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                            animate={{
-                                boxShadow: [
-                                    "0 0 50px -10px rgba(59,130,246,0.7)",
-                                    "0 0 60px -10px rgba(59,130,246,0.9)",
-                                    "0 0 50px -10px rgba(59,130,246,0.7)"
-                                ]
-                            }}
-                            transition={{
-                                boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" }
-                            }}
-                        >
-                            APPLY FOR ACCESS
-                            <p className="text-xs md:text-sm font-normal mt-2 opacity-90 tracking-normal">
-                                Stop lying to yourself.
-                            </p>
-                        </motion.button>
+                        <Link href="/signup" className="w-full">
+                            <motion.button
+                                className="w-full bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white font-bold py-6 px-10 rounded-2xl text-lg md:text-xl tracking-widest shadow-[0_0_50px_-10px_rgba(59,130,246,0.8)] hover:shadow-[0_0_70px_-5px_rgba(59,130,246,1)] transition-all duration-300"
+                                whileHover={{ scale: 1.02, y: -2 }}
+                                whileTap={{ scale: 0.98 }}
+                                animate={{
+                                    boxShadow: [
+                                        "0 0 50px -10px rgba(59,130,246,0.7)",
+                                        "0 0 60px -10px rgba(59,130,246,0.9)",
+                                        "0 0 50px -10px rgba(59,130,246,0.7)"
+                                    ]
+                                }}
+                                transition={{
+                                    boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                                }}
+                            >
+                                APPLY FOR ACCESS
+                                <p className="text-xs md:text-sm font-normal mt-2 opacity-90 tracking-normal">
+                                    Stop lying to yourself.
+                                </p>
+                            </motion.button>
+                        </Link>
 
                         {/* Footer */}
                         <p className="text-center text-xs text-gray-600 mt-16">
-                            © 2024 God Complex. All rights reserved.
+                            © 2026 God Complex. All rights reserved.
                         </p>
                     </div>
 

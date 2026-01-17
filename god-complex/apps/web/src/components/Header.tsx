@@ -18,8 +18,8 @@ export function Header() {
     return (
         <header
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-                    ? "bg-[#0a0e14]/80 backdrop-blur-md border-b border-gray-800/50"
-                    : "bg-transparent"
+                ? "bg-[#0a0e14]/80 backdrop-blur-md border-b border-gray-800/50"
+                : "bg-transparent"
                 }`}
         >
             <div className="max-w-7xl mx-auto px-6 md:px-8">
@@ -45,7 +45,7 @@ export function Header() {
                             Sign In
                         </Link>
                         <Link
-                            href="/apply"
+                            href="/signup"
                             className="text-sm px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all tracking-wide border border-gray-700/50"
                         >
                             Apply
