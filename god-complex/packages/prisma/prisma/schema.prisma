@@ -7,6 +7,7 @@
 generator client {
   provider = "prisma-client-js"  
   output   = "../generated/prisma"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -46,11 +47,20 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  applicationDone Boolean  @default(false)
+  displayName     String?
+  motivation      String?
+
   memberships     Membership[]
   goals           Goal[]
   goalResults     GoalResult[]
   monthlyOutcomes MonthlyOutcome[]
   penaltyAssignments PenaltyAssignment[]
+  
+  publicId        String?  @unique // "GC-XXXX-XX" - Optional for migration
+  
+  createdGroups   Group[]  @relation("GroupCreator")
+  joinRequests    GroupJoinRequest[]
   
   sessions      Session[]
   accounts      Account[]
@@ -61,6 +71,7 @@ model User {
 model Session {
   id        String   @id @default(cuid())
   userId    String
+  token     String   @unique
   expiresAt DateTime
   ipAddress String?
   userAgent String?
@@ -82,6 +93,7 @@ model Account {
   accessTokenExpiresAt DateTime?
   refreshTokenExpiresAt DateTime?
   scope        String?
+  idToken      String?
   password     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -111,6 +123,10 @@ model Group {
 
   timezone        String   @default("UTC")
   
+  creatorId       String?   // Optional for existing groups during migration
+  creator         User?     @relation("GroupCreator", fields: [creatorId], references: [id])
+  
+  joinRequests    GroupJoinRequest[]
   dailyFinalizations DailyFinalization[]
   auditLogs       AuditLog[]
   
@@ -288,4 +304,23 @@ enum PenaltyStatus {
 enum PenaltyVerdict {
   UPHELD
   REVERSED
+}
+
+model GroupJoinRequest {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  status    JoinStatus
+  createdAt DateTime @default(now())
+
+  group     Group    @relation(fields: [groupId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}
+
+enum JoinStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
