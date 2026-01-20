@@ -16,7 +16,7 @@ export interface Goal {
 
 // --- Components ---
 
-export function TopBar() {
+export function TopBar({ user }: { user: any }) {
     return (
         <div className="flex items-center justify-between py-6 px-8 bg-[#050810] border-b border-[#1E293B]">
             <div className="flex items-center gap-3">
@@ -26,8 +26,13 @@ export function TopBar() {
                     <span className="text-gray-600 text-[10px] tracking-widest">SYSTEM DASHBOARD</span>
                 </div>
             </div>
-            <div className="text-gray-500 text-xs font-mono tracking-widest">
-                JANUARY 2026
+            <div className="flex items-center gap-4">
+                <div className="text-gray-500 text-xs font-mono tracking-widest">
+                    {user?.displayName || user?.name || "USER"}
+                </div>
+                <div className="text-gray-500 text-xs font-mono tracking-widest">
+                    JANUARY 2026
+                </div>
             </div>
         </div>
     );

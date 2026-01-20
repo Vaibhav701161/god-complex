@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { GCLogo } from "@/components/IsometricCube";
+import { useAuth } from "@/hooks/useAuth";
 
 // --- Icons (Custom, Unique, Sharp) ---
 
@@ -80,6 +81,8 @@ function SectionHeader({ label }: { label: string }) {
 }
 
 export function Sidebar() {
+    const { logout } = useAuth();
+
     return (
         <aside className="fixed left-0 top-0 bottom-0 w-64 bg-[#050810] border-r border-[#1E293B] z-50 flex flex-col hidden md:flex">
             {/* Logo Area */}
@@ -109,7 +112,13 @@ export function Sidebar() {
 
             </div>
 
-            <div className="p-6 border-t border-[#1E293B]">
+            <div className="p-6 border-t border-[#1E293B] space-y-3">
+                <button
+                    onClick={logout}
+                    className="w-full py-2 px-4 bg-red-900/20 hover:bg-red-900/30 border border-red-900/50 text-red-500 text-[10px] font-mono tracking-widest uppercase transition-colors"
+                >
+                    LOGOUT
+                </button>
                 <div className="text-[9px] text-gray-700 font-mono text-center">
                     V1.0.4 // ENFORCEMENT ACTIVE
                 </div>

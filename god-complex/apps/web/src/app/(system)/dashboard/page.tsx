@@ -1,11 +1,34 @@
 "use client";
 
 import { TopBar, SystemDemandPanel, TodayGoalsPanel, HistoricalGrid, MonthlyGraph } from "@/components/DashboardComponents";
+import { useUser } from "@/hooks/useUser";
 
 export default function Dashboard() {
+    const { user, loading, error } = useUser();
+
+    if (loading) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+                <div className="text-gray-500 font-mono text-sm tracking-widest">
+                    LOADING SYSTEM DATA...
+                </div>
+            </main>
+        );
+    }
+
+    if (error || !user) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+                <div className="text-red-500 font-mono text-sm tracking-widest">
+                    ERROR: {error || "Failed to load user data"}
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="min-h-screen bg-[#0a0e14] pb-32">
-            <TopBar />
+            <TopBar user={user} />
 
             {/* 1. SYSTEM DEMAND (Dominant) */}
             <section className="relative z-10">
