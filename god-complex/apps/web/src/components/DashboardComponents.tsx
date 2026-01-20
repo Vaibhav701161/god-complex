@@ -5,7 +5,7 @@ import { GCLogo } from "@/components/IsometricCube";
 import { useState } from "react";
 
 // --- Types ---
-export type DailyStatus = 'completed' | 'failed' | 'pending' | 'locked' | 'auto-fail' | 'none';
+export type DailyStatus = 'completed' | 'min_effort' | 'failed' | 'pending' | 'locked' | 'auto-fail' | 'none';
 
 export interface Goal {
     id: string;
@@ -38,9 +38,35 @@ export function TopBar({ user }: { user: any }) {
     );
 }
 
-export function SystemDemandPanel() {
-    // Dominant panel states: 'DECLARATION_REQUIRED' | 'EXECUTION_LOCKED' | 'RESOLUTION_REQUIRED' | 'DAY_FAILED'
-    const state = 'DECLARATION_REQUIRED'; // Mock state
+export function SystemDemandPanel({ mode, failureMomentum, pattern }: {
+    mode: 'DECLARATION_REQUIRED' | 'EXECUTION_IN_PROGRESS' | 'RESOLUTION_PENDING' | 'DAY_FINALIZED';
+    failureMomentum: number;
+    pattern?: string;
+}) {
+    const modeConfig = {
+        DECLARATION_REQUIRED: {
+            title: 'Declaration Required',
+            message: 'No goals declared for today. Outcomes must be recorded to initiate the protocol.',
+            buttonText: 'Declare Goals',
+        },
+        EXECUTION_IN_PROGRESS: {
+            title: 'Execution In Progress',
+            message: 'Contract active. Execution window open until cutoff.',
+            buttonText: 'View Contract',
+        },
+        RESOLUTION_PENDING: {
+            title: 'Resolution Pending',
+            message: 'Cutoff passed. Check-in required to record outcomes.',
+            buttonText: 'Submit Check-In',
+        },
+        DAY_FINALIZED: {
+            title: 'Day Finalized',
+            message: 'All outcomes recorded. System verdict logged.',
+            buttonText: 'View Results',
+        },
+    };
+
+    const config = modeConfig[mode];
 
     return (
         <div className="w-full bg-[#050810] border-y border-[#3B82F6] shadow-[0_0_50px_-20px_rgba(59,130,246,0.5)] p-8 md:p-12 mb-12 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
@@ -53,34 +79,34 @@ export function SystemDemandPanel() {
                     <span className="text-blue-500 font-bold tracking-[0.2em] text-sm uppercase">System Demand</span>
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight uppercase">
-                    Declaration Required
+                    {config.title}
                 </h1>
                 <p className="text-gray-400 font-mono text-xs md:text-sm max-w-xl mt-2">
-                    No goals declared for today. Outcomes must be recorded to initiate the protocol.
+                    {config.message}
                 </p>
 
                 <div className="flex flex-col gap-1 mt-4 border-l-2 border-red-900/30 pl-4">
                     <div className="text-[10px] text-red-500 font-mono tracking-widest uppercase">
-                        Failure Momentum: +2
+                        Failure Momentum: +{failureMomentum}
                     </div>
-                    <div className="text-[10px] text-gray-500 font-mono tracking-widest uppercase">
-                        Pattern: Inconsistent Execution
-                    </div>
+                    {pattern && (
+                        <div className="text-[10px] text-gray-500 font-mono tracking-widest uppercase">
+                            Pattern: {pattern}
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="relative z-10 w-full md:w-auto">
                 <button className="w-full md:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold tracking-[0.2em] text-sm shadow-[0_0_30px_-5px_rgba(59,130,246,0.6)] transition-all uppercase">
-                    Declare Goals
+                    {config.buttonText}
                 </button>
             </div>
         </div>
     );
 }
 
-export function TodayGoalsPanel() {
-    // Mock: No goals declared yet
-    const goals: any[] = [];
+export function TodayGoalsPanel({ goals, declarationDelta }: { goals: any[]; declarationDelta?: number | null }) {
 
     if (goals.length === 0) {
         return (
@@ -96,9 +122,16 @@ export function TodayGoalsPanel() {
                 </div>
 
                 <div className="mt-4 text-center">
-                    <span className="text-[10px] text-yellow-600/70 font-mono tracking-widest uppercase">
-                        Declaration Delta: −12% vs 7-day average
-                    </span>
+                    {declarationDelta !== null && declarationDelta !== undefined ? (
+                        <span className={`text-[10px] font-mono tracking-widest uppercase ${declarationDelta < 0 ? 'text-red-500' : declarationDelta > 0 ? 'text-green-500' : 'text-gray-500'
+                            }`}>
+                            Declaration Delta: {declarationDelta > 0 ? '+' : ''}{declarationDelta}% vs 7-day average
+                        </span>
+                    ) : (
+                        <span className="text-[10px] text-gray-700 font-mono tracking-widest uppercase">
+                            Establishing Baseline
+                        </span>
+                    )}
                 </div>
             </div>
         )
@@ -119,30 +152,44 @@ export function TodayGoalsPanel() {
     );
 }
 
-export function HistoricalGrid() {
-    // 31 days in Jan
+export function HistoricalGrid({ history, loading }: {
+    history: Map<number, any>;
+    loading: boolean;
+}) {
     const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-    // Goals only show if they were active in history
-    const historyGoals = [
-        "God Complex [PROJECT]",
-        "Neetcode 150 [DSA]",
-        "Public Learning",
-        "GYM",
-        "Protien intake [100g]",
-        "Water intake [3L]",
-    ];
+    // Extract unique goal titles from history
+    const allGoalTitles = new Set<string>();
+    history.forEach(entry => {
+        entry.goals?.forEach((g: any) => allGoalTitles.add(g.title));
+    });
 
-    // Status logic: 
-    // - Days 1-14: Random data
-    // - Day 15 (Fails)
-    // - >15: Neutral dots (Not Declared)
-    const getStatus = (day: number, goalIndex: number): DailyStatus => {
-        if (day > 15) return 'none'; // Future/Not Declared -> Neutral dot
-        if (day === 15) return 'failed'; // Recent fail
-        // Deterministic pseudo-random for history to avoid hydration errors
-        const isFailure = (day + goalIndex * 2) % 10 === 0;
-        return isFailure ? 'failed' : 'completed';
+    const historyGoals = Array.from(allGoalTitles);
+
+    // If no history yet, show empty state
+    if (historyGoals.length === 0 && !loading) {
+        return (
+            <div className="mb-12">
+                <div className="flex items-center gap-4 mb-6">
+                    <h2 className="text-sm font-bold text-gray-600 tracking-[0.2em] uppercase">Enforcement History</h2>
+                    <div className="h-px bg-[#1E293B] flex-1"></div>
+                </div>
+                <div className="bg-[#0B101A] border border-[#1E293B] rounded-sm p-12 text-center">
+                    <p className="text-gray-600 font-mono text-sm">NO ENFORCEMENT HISTORY</p>
+                    <p className="text-gray-800 text-xs mt-2">Baseline forming</p>
+                </div>
+            </div>
+        );
+    }
+
+    const getStatusForGoalOnDay = (goalTitle: string, day: number): DailyStatus => {
+        const dayEntry = history.get(day);
+        if (!dayEntry) return 'none';
+
+        const goal = dayEntry.goals?.find((g: any) => g.title === goalTitle);
+        if (!goal) return 'none';
+
+        return goal.status || 'none';
     };
 
     return (
@@ -172,11 +219,13 @@ export function HistoricalGrid() {
                             </div>
 
                             {days.map(d => {
-                                const status = getStatus(d, i);
+                                const status = getStatusForGoalOnDay(goal, d);
                                 return (
                                     <div key={d} className="border-r border-[#1E293B]/20 flex items-center justify-center h-10">
                                         {status === 'completed' && <div className="w-2.5 h-2.5 bg-blue-600/60 rounded-[1px]"></div>}
+                                        {status === 'min_effort' && <div className="w-2.5 h-2.5 bg-yellow-600/60 rounded-[1px]"></div>}
                                         {status === 'failed' && <div className="w-2.5 h-2.5 bg-red-900/60 border border-red-800/50 rounded-[1px]"></div>}
+                                        {status === 'auto-fail' && <div className="w-2.5 h-2.5 bg-red-500/80 border border-red-400/50 rounded-[1px]"></div>}
                                         {status === 'none' && <div className="w-0.5 h-0.5 bg-gray-800 rounded-full"></div>}
                                     </div>
                                 )
@@ -189,11 +238,23 @@ export function HistoricalGrid() {
     );
 }
 
-export function MonthlyGraph() {
-    // Moved contextual header outside component or updated text
-    const rawData = [
-        60, 75, 78, 30, 80, 85, 82, 45, 90, 82, 35, 80, 85, 82, 35, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    ];
+export function MonthlyGraph({ history }: { history: Map<number, any> }) {
+    // Compute real consistency data from history
+    const rawData = Array.from({ length: 31 }, (_, i) => {
+        const day = i + 1;
+        const dayEntry = history.get(day);
+
+        if (!dayEntry || !dayEntry.goals || dayEntry.goals.length === 0) {
+            return 0;
+        }
+
+        // Calculate completion percentage for the day
+        const completedCount = dayEntry.goals.filter((g: any) =>
+            g.status === 'completed' || g.status === 'min_effort'
+        ).length;
+
+        return (completedCount / dayEntry.goals.length) * 100;
+    });
 
     return (
         <div className="w-full">
@@ -231,6 +292,94 @@ export function MonthlyGraph() {
             </div>
             <div className="text-[10px] text-red-900/80 font-mono tracking-widest uppercase text-right">
                 Failure Threshold: 3 days remaining before MONTH FAILURE
+            </div>
+        </div>
+    );
+}
+
+export function Leaderboard({ leaderboard, currentUserId }: {
+    leaderboard: Array<{ userId: string; name: string; score: number; rank: number }>;
+    currentUserId: string;
+}) {
+    if (leaderboard.length === 0) {
+        return (
+            <div className="mb-12">
+                <div className="flex items-center gap-4 mb-6">
+                    <h2 className="text-sm font-bold text-gray-600 tracking-[0.2em] uppercase">Group Rankings</h2>
+                    <div className="h-px bg-[#1E293B] flex-1"></div>
+                </div>
+                <div className="bg-[#0B101A] border border-[#1E293B] rounded-sm p-12 text-center">
+                    <p className="text-gray-600 font-mono text-sm">NO RANKINGS AVAILABLE</p>
+                    <p className="text-gray-800 text-xs mt-2">Insufficient data for group comparison</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mb-12">
+            <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-sm font-bold text-white tracking-[0.2em] uppercase">Group Rankings</h2>
+                <div className="h-px bg-[#1E293B] flex-1"></div>
+            </div>
+
+            <div className="bg-[#0B101A] border border-[#1E293B] rounded-sm">
+                {leaderboard.map((entry, index) => {
+                    const isCurrentUser = entry.userId === currentUserId;
+                    const isTopRank = entry.rank === 1;
+                    const isBottomRank = entry.rank === leaderboard.length;
+
+                    return (
+                        <div
+                            key={entry.userId}
+                            className={`
+                                grid grid-cols-[60px_1fr_120px] gap-4 p-4 border-b border-[#1E293B]/30 last:border-b-0
+                                ${isCurrentUser ? 'bg-blue-900/10 border-l-2 border-l-blue-600' : ''}
+                                ${isTopRank ? 'bg-green-900/5' : ''}
+                                ${isBottomRank ? 'bg-red-900/5' : ''}
+                                hover:bg-[#0f1623] transition-colors
+                            `}
+                        >
+                            <div className="flex items-center justify-center">
+                                <div className={`
+                                    text-2xl font-bold font-mono
+                                    ${isTopRank ? 'text-green-500' : isBottomRank ? 'text-red-500' : 'text-gray-600'}
+                                `}>
+                                    #{entry.rank}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col justify-center">
+                                <div className="flex items-center gap-2">
+                                    <span className={`font-mono text-sm ${isCurrentUser ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>
+                                        {entry.name}
+                                    </span>
+                                    {isCurrentUser && (
+                                        <span className="text-[10px] text-blue-500 uppercase tracking-widest">(You)</span>
+                                    )}
+                                </div>
+                                <div className="text-[10px] text-gray-600 font-mono tracking-widest uppercase mt-1">
+                                    User ID: {entry.userId.slice(0, 8)}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col items-end justify-center">
+                                <div className="text-xl font-bold text-white font-mono">
+                                    {entry.score.toFixed(2)}
+                                </div>
+                                <div className="text-[10px] text-gray-600 uppercase tracking-widest">
+                                    Score
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="mt-4 text-center">
+                <span className="text-[10px] text-gray-700 font-mono tracking-widest uppercase">
+                    Rankings updated in real-time based on monthly performance
+                </span>
             </div>
         </div>
     );

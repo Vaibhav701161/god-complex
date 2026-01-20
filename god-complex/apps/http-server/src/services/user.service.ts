@@ -1,6 +1,8 @@
 import { prisma } from "@god-complex/prisma";
 
 export async function getMe(userId: string) {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+
     const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -14,6 +16,23 @@ export async function getMe(userId: string) {
             displayName: true,
             motivation: true,
             createdAt: true,
+            memberships: {
+                where: {
+                    month: currentMonth,
+                },
+                select: {
+                    groupId: true,
+                    month: true,
+                    group: {
+                        select: {
+                            id: true,
+                            name: true,
+                            timezone: true,
+                            cutoffHour: true,
+                        },
+                    },
+                },
+            },
         },
     });
 

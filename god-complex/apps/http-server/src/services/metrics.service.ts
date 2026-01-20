@@ -1,0 +1,124 @@
+import { prisma } from "@god-complex/prisma";
+
+export interface MetricsResult {
+    efficiency: number;
+    excuseDebt: number;
+    failureMomentum: number;
+    pattern: string | null;
+    declarationDelta: number | null;
+    metadata: {
+        declaredGoals: number;
+        completedGoals: number;
+        failedGoals: number;
+        activeExcuses: number;
+        avgDailyGoals7Day: number;
+    };
+}
+
+/**
+ * GET DASHBOARD METRICS
+ * 
+ * Centralized, backend-owned calculation of all performance metrics.
+ * Eliminates client-side logic and ensures consistent formulas.
+ */
+export async function getDashboardMetrics(groupId: string, userId: string): Promise<MetricsResult> {
+    const now = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    // 1. Fetch current month data for efficiency
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthGoals = await prisma.goal.findMany({
+        where: {
+            groupId,
+            userId,
+            date: { gte: currentMonthStart },
+        },
+        include: { result: true }
+    });
+
+    // 2. Fetch last 7 days data for momentum/debt/delta
+    const recentGoals = await prisma.goal.findMany({
+        where: {
+            groupId,
+            userId,
+            date: { gte: sevenDaysAgo },
+        },
+        include: { result: true }
+    });
+
+    // --- EFFICIENCY CALCULATION ---
+    // Formula: (completed + 0.5 * minEffort) / totalDeclared
+    const completed = monthGoals.filter(g => g.result?.status === 'COMPLETED').length;
+    const minEffort = monthGoals.filter(g => g.result?.status === 'MIN_EFFORT').length;
+    const totalDeclared = monthGoals.length;
+
+    const efficiency = totalDeclared > 0
+        ? ((completed + (0.5 * minEffort)) / totalDeclared) * 100
+        : 0;
+
+    // --- FAILURE MOMENTUM ---
+    // Count specific failures in last 7 days
+    const recentFailures = recentGoals.filter(g =>
+        g.result?.status === 'FAILED' ||
+        (g.result?.status === undefined && g.date < new Date(now.setHours(0, 0, 0, 0))) // Past and no result (implied fail)
+    ).length;
+
+    const failureMomentum = recentFailures;
+
+    // --- EXCUSE DEBT ---
+    // Count unique excuses in last 7 days
+    const excuses = new Set(
+        recentGoals
+            .map(g => g.result?.failureReason)
+            .filter(r => r && r !== 'SYSTEM_ASSIGNED' && (r as any) !== 'NO_EXCUSE')
+    );
+    const excuseDebt = excuses.size;
+
+    // --- PATTERN CLASSIFICATION ---
+    let pattern: string | null = null;
+    if (failureMomentum > 4) pattern = "High Failure Rate";
+    else if (excuseDebt > 2) pattern = "Excuse Dependency";
+    else if (failureMomentum > 0 && excuseDebt === 0) pattern = "Silent Failure";
+    else if (failureMomentum === 0 && totalDeclared > 5) pattern = "Consistent Execution";
+
+    // --- DECLARATION DELTA ---
+    // Compare today's count vs 7-day average
+    const todayGoalsCount = recentGoals.filter(g =>
+        g.date.toISOString().split('T')[0] === new Date().toISOString().split('T')[0]
+    ).length;
+
+    // Group goals by date for last 7 days (excluding today for average)
+    const goalsByDay = new Map<string, number>();
+    recentGoals.forEach(g => {
+        const d = g.date.toISOString().split('T')[0];
+        if (d !== new Date().toISOString().split('T')[0]) {
+            goalsByDay.set(d, (goalsByDay.get(d) || 0) + 1);
+        }
+    });
+
+    let totalPastGoals = 0;
+    goalsByDay.forEach(count => totalPastGoals += count);
+    const activeDays = goalsByDay.size || 1; // Avoid div 0
+    const avgDailyGoals = totalPastGoals / activeDays;
+
+    let declarationDelta: number | null = null;
+    if (avgDailyGoals > 0) {
+        declarationDelta = Math.round(((todayGoalsCount - avgDailyGoals) / avgDailyGoals) * 100);
+    }
+
+    return {
+        efficiency,
+        excuseDebt,
+        failureMomentum,
+        pattern,
+        declarationDelta,
+        metadata: {
+            declaredGoals: totalDeclared,
+            completedGoals: completed,
+            failedGoals: monthGoals.filter(g => g.result?.status === 'FAILED').length,
+            activeExcuses: excuseDebt,
+            avgDailyGoals7Day: avgDailyGoals
+        }
+    };
+}
