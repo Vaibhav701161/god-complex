@@ -23,7 +23,7 @@ export function useMonthlyHistory() {
 
                 // 🎯 SINGLE BATCH QUERY - Replaces 31 individual calls
                 const response = await fetch(
-                    `http://localhost:4000/api/history/${groupId}/${currentMonth}`,
+                    `/api/history/${groupId}/${currentMonth}`,
                     { credentials: "include" }
                 );
 

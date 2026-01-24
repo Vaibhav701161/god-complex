@@ -21,7 +21,7 @@ export function useTodayGoals() {
             try {
                 setLoading(true);
                 const response = await fetch(
-                    `http://localhost:4000/api/daily-goals/${groupId}/${currentDate}`,
+                    `/api/daily-goals/${groupId}/${currentDate}`,
                     { credentials: "include" }
                 );
 

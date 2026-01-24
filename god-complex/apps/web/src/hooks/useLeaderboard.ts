@@ -21,7 +21,7 @@ export function useLeaderboard() {
             try {
                 setLoading(true);
                 const response = await fetch(
-                    `http://localhost:4000/api/leaderboard/leaderboard/${groupId}/${currentMonth}`,
+                    `/api/leaderboard/leaderboard/${groupId}/${currentMonth}`,
                     { credentials: "include" }
                 );
 

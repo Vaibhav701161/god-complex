@@ -35,7 +35,7 @@ export function useDashboardMetrics() {
 
                 // 🎯 SINGLE SOURCE OF TRUTH - Backend computes everything
                 const response = await fetch(
-                    `http://localhost:4000/api/metrics/${groupId}`,
+                    `/api/metrics/${groupId}`,
                     { credentials: "include" }
                 );
 

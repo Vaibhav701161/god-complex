@@ -34,7 +34,7 @@ export function useSystemMode() {
 
                 // 🎯 BACKEND AUTHORITY - Server determines mode
                 const response = await fetch(
-                    `http://localhost:4000/api/state/${groupId}/${currentDate}`,
+                    `/api/state/${groupId}/${currentDate}`,
                     { credentials: "include" }
                 );
 
