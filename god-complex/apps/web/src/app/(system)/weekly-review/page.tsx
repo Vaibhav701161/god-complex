@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useDashboardContext } from "@/context/DashboardContext";
+import { useDashboardContext } from "@/hooks/useDashboardContext";
 import { useMonthlyHistory } from "@/hooks/useMonthlyHistory";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { getWeekRange, getDayName, getWeekNumber, formatDateRange } from "@/lib/dateUtils";

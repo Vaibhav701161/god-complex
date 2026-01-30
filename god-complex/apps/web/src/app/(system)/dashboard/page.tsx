@@ -3,7 +3,7 @@
 import { TopBar, SystemDemandPanel, TodayGoalsPanel, HistoricalGrid, MonthlyGraph, Leaderboard } from "@/components/DashboardComponents";
 import GroupSelector from "@/components/GroupSelector";
 import { useUser } from "@/hooks/useUser";
-import { DashboardProvider, useDashboardContext } from "@/hooks/useDashboardContext";
+import { useDashboardContext } from "@/hooks/useDashboardContext";
 import { useTodayGoals } from "@/hooks/useTodayGoals";
 import { useSystemMode, useAggregateSystemMode } from "@/hooks/useSystemMode";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
@@ -141,9 +141,5 @@ function DashboardContent() {
 }
 
 export default function Dashboard() {
-    return (
-        <DashboardProvider>
-            <DashboardContent />
-        </DashboardProvider>
-    );
+    return <DashboardContent />;
 }

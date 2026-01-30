@@ -89,13 +89,13 @@ router.post(
     // Create audit log entry
     await prisma.auditLog.create({
       data: {
-        userId: req.user!.id,
+        actorId: req.user!.id,
         groupId: penalty.groupId,
         action: "PENALTY_COMPLETED",
         targetType: "PenaltyAssignment",
         targetId: penalty.id,
         source: "USER",
-        metadata: {
+        changes: {
           penaltyType: penalty.penaltyType,
         },
       },
@@ -157,13 +157,13 @@ router.post(
       // Create audit log entry
       await prisma.auditLog.create({
         data: {
-          userId: req.user!.id,
+          actorId: req.user!.id,
           groupId: penalty.groupId,
           action: "PENALTY_APPEALED",
           targetType: "PenaltyAssignment",
           targetId: penalty.id,
           source: "USER",
-          metadata: {
+          changes: {
             penaltyType: penalty.penaltyType,
             appealReason: reason.trim(),
           },

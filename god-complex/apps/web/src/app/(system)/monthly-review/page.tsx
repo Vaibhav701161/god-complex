@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useDashboardContext } from "@/context/DashboardContext";
+import { useDashboardContext } from "@/hooks/useDashboardContext";
 import { useMonthlyHistory } from "@/hooks/useMonthlyHistory";
 import { useMonthlyOutcome } from "@/hooks/useMonthlyOutcome";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";

@@ -1,6 +1,7 @@
 
 import { Router } from "express";
 import { requireAdminKey } from "../middleware/admin.middleware";
+import { requireAuth } from "../middleware/auth.middleware";
 import { finalizeDay } from "../services/daily.service";
 import { closeMonth } from "../services/monthly.service";
 import { prisma } from "@god-complex/prisma";

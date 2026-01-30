@@ -6,8 +6,74 @@ import {
   getGroup,
 } from "../services/group.service";
 import { requireAuth } from "../middleware/auth.middleware";
+import { prisma } from "@god-complex/prisma";
 
 const router = Router();
+
+router.get("/audit/:groupId", requireAuth, async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const userId = req.user!.id;
+        
+        // Verify user has membership in this group (any month)
+        const membership = await prisma.membership.findFirst({
+            where: {
+                userId,
+                groupId,
+            }
+        });
+        
+        if (!membership) {
+            res.status(403).json({ error: "Not a member of this group" });
+            return;
+        }
+        
+        // Parse query parameters
+        const { action, source, startDate, endDate, correlationId, limit = "100" } = req.query;
+        const parsedLimit = Math.min(parseInt(limit as string) || 100, 500);
+        
+        // Build filter conditions
+        const where: any = {
+            groupId,
+        };
+        
+        if (action) {
+            where.action = action as string;
+        }
+        
+        if (source) {
+            where.source = source as string;
+        }
+        
+        if (correlationId) {
+            where.correlationId = correlationId as string;
+        }
+        
+        if (startDate || endDate) {
+            where.createdAt = {};
+            if (startDate) {
+                where.createdAt.gte = new Date(startDate as string);
+            }
+            if (endDate) {
+                where.createdAt.lte = new Date(endDate as string);
+            }
+        }
+        
+        // Fetch audit logs
+        const [logs, total] = await Promise.all([
+            prisma.auditLog.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                take: parsedLimit,
+            }),
+            prisma.auditLog.count({ where }),
+        ]);
+        
+        res.json({ logs, total });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 /**
  * Error messages that map to specific HTTP status codes:

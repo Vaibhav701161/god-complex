@@ -139,3 +139,27 @@ export interface CreateGroupInput {
     cutoffHour: number;
     timezone: string;
 }
+
+export type AuditSource = 'SYSTEM' | 'CRON' | 'ADMIN' | 'USER';
+
+export interface AuditLogEntry {
+    id: string;
+    action: string;
+    actorId: string | null;
+    targetId: string;
+    targetType: string;
+    changes: Record<string, any> | null;
+    createdAt: string;
+    source: AuditSource;
+    reason: string | null;
+    correlationId: string | null;
+    groupId: string | null;
+}
+
+export interface AuditLogFilters {
+    action?: string;
+    source?: AuditSource;
+    startDate?: string;
+    endDate?: string;
+    correlationId?: string;
+}
