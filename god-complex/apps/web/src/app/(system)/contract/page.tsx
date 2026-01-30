@@ -1,258 +1,659 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { useDashboardContext } from "@/hooks/useDashboardContext";
+import { useTodayGoals } from "@/hooks/useTodayGoals";
+import { useSystemMode } from "@/hooks/useSystemMode";
+import { Goal, SystemMode } from "@/types/dashboard";
 
 // --- Types & Constants ---
-type PageState = "DECLARATION" | "EXECUTION" | "RESOLUTION" | "FAILED";
+type GoalCategory = "STUDY" | "HEALTH" | "CAREER" | "BUILD" | "SOCIAL";
 
-type Goal = {
+interface LocalGoal {
     id: string;
     text: string;
-    metricType: string;
-    metricValue: string;
-    discomfort: boolean;
-    status?: "PENDING" | "COMPLETED" | "FAILED";
-    excuse?: string;
+    category: GoalCategory;
+    finishCondition: string;
+    isUncomfortable: boolean;
+}
+
+const CATEGORY_LABELS: Record<GoalCategory, string> = {
+    STUDY: "Study",
+    HEALTH: "Health",
+    CAREER: "Career",
+    BUILD: "Build",
+    SOCIAL: "Social",
 };
+
+// Map backend SystemMode to page display state
+type PageState = "DECLARATION" | "EXECUTION" | "RESOLUTION" | "FAILED";
+
+function mapSystemModeToPageState(mode: SystemMode): PageState {
+    switch (mode) {
+        case "DECLARATION_REQUIRED":
+            return "DECLARATION";
+        case "EXECUTION_IN_PROGRESS":
+            return "EXECUTION";
+        case "RESOLUTION_PENDING":
+            return "RESOLUTION";
+        case "DAY_FINALIZED":
+            return "FAILED"; // Or could show a different "completed" state
+        default:
+            return "DECLARATION";
+    }
+}
 
 // --- Contract Page ---
 export default function DailyContract() {
-    // DEV: Toggle for testing states
-    const [state, setState] = useState<PageState>("DECLARATION");
+    // Context and hooks
+    const { groupId, currentDate, loading: contextLoading, error: contextError, refetch } = useDashboardContext();
+    const { goals: existingGoals, loading: goalsLoading, error: goalsError, refetch: refetchGoals } = useTodayGoals();
+    const { mode: systemMode, loading: modeLoading } = useSystemMode();
 
-    // Data State
-    const [goals, setGoals] = useState<Goal[]>([]);
-    const [newGoal, setNewGoal] = useState({ text: "", metricType: "BINARY", metricValue: "", discomfort: false });
+    // Derive page state from system mode
+    const [pageState, setPageState] = useState<PageState>("DECLARATION");
+
+    // Local form state for goal creation
+    const [localGoals, setLocalGoals] = useState<LocalGoal[]>([]);
+    const [newGoal, setNewGoal] = useState<{
+        text: string;
+        category: GoalCategory;
+        finishCondition: string;
+        isUncomfortable: boolean;
+    }>({
+        text: "",
+        category: "BUILD",
+        finishCondition: "",
+        isUncomfortable: false,
+    });
+
+    // Submission state
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
+    // Update page state based on system mode and existing goals
+    useEffect(() => {
+        if (modeLoading) return;
+
+        // If goals already exist, we're past declaration
+        if (existingGoals.length > 0) {
+            const mappedState = mapSystemModeToPageState(systemMode);
+            // If system says DECLARATION but we have goals, show EXECUTION
+            if (mappedState === "DECLARATION") {
+                setPageState("EXECUTION");
+            } else {
+                setPageState(mappedState);
+            }
+        } else {
+            setPageState(mapSystemModeToPageState(systemMode));
+        }
+    }, [systemMode, existingGoals, modeLoading]);
 
     // --- Actions ---
 
     const addGoal = () => {
-        if (goals.length >= 3) return;
-        if (!newGoal.text) return;
+        if (localGoals.length >= 3) return;
+        if (!newGoal.text.trim()) return;
+        if (!newGoal.finishCondition.trim()) return;
 
-        setGoals([...goals, { ...newGoal, id: Math.random().toString(), status: "PENDING" }]);
-        setNewGoal({ text: "", metricType: "BINARY", metricValue: "", discomfort: false });
+        setLocalGoals([
+            ...localGoals,
+            {
+                id: Math.random().toString(36).substr(2, 9),
+                text: newGoal.text.trim(),
+                category: newGoal.category,
+                finishCondition: newGoal.finishCondition.trim(),
+                isUncomfortable: newGoal.isUncomfortable,
+            },
+        ]);
+        setNewGoal({
+            text: "",
+            category: "BUILD",
+            finishCondition: "",
+            isUncomfortable: false,
+        });
+        setSubmitError(null);
     };
 
     const removeGoal = (id: string) => {
-        setGoals(goals.filter(g => g.id !== id));
+        setLocalGoals(localGoals.filter((g) => g.id !== id));
     };
 
-    const lockContract = () => {
+    const lockContract = async () => {
+        if (!groupId) {
+            setSubmitError("No active group. Please join a group first.");
+            return;
+        }
+
+        if (localGoals.length === 0) {
+            setSubmitError("⚠️ VALIDATION FAILED: At least 1 goal required");
+            return;
+        }
+
         setIsSubmitting(true);
-        setTimeout(() => {
-            setState("EXECUTION");
+        setSubmitError(null);
+
+        try {
+            // Map frontend goals to backend DailyGoalInput format
+            const mappedGoals = localGoals.map((goal) => ({
+                title: goal.text,
+                category: goal.category,
+                finishCondition: goal.finishCondition,
+                minEffort: goal.finishCondition, // Use same value for both
+                isUncomfortable: goal.isUncomfortable,
+            }));
+
+            const response = await fetch("/api/daily-goals/submit", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                    groupId,
+                    date: currentDate,
+                    goals: mappedGoals,
+                }),
+            });
+
+            if (response.status === 201) {
+                // Success - refresh goals data, then transition state
+                // Don't clear localGoals until server goals are loaded
+                setPageState("EXECUTION");
+                await refetchGoals();
+                refetch();
+                // Now that server goals are loaded, clear local state
+                setLocalGoals([]);
+                return;
+            }
+
+            // Handle error responses
+            const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
+            const errorMessage = errorData.message || errorData.error || "Submission failed";
+
+            // Map specific error messages to user-friendly versions
+            if (response.status === 403 || errorMessage.toLowerCase().includes("cutoff")) {
+                setSubmitError("⚠️ CUTOFF PASSED: Cannot submit goals after the daily cutoff time");
+            } else if (errorMessage.toLowerCase().includes("already submitted") || errorMessage.toLowerCase().includes("duplicate")) {
+                setSubmitError("⚠️ DUPLICATE SUBMISSION: Contract already locked for today");
+            } else if (errorMessage.toLowerCase().includes("uncomfortable") || errorMessage.toLowerCase().includes("discomfort")) {
+                setSubmitError("⚠️ DISCOMFORT PROTOCOL: At least 1 uncomfortable goal required this week");
+            } else if (errorMessage.toLowerCase().includes("at least one goal")) {
+                setSubmitError("⚠️ VALIDATION FAILED: At least 1 goal required");
+            } else if (response.status === 500) {
+                setSubmitError("⚠️ SYSTEM ERROR: Server error. Please try again or contact support.");
+            } else {
+                setSubmitError(`⚠️ ERROR: ${errorMessage}`);
+            }
+        } catch (err) {
+            console.error("Goal submission error:", err);
+            setSubmitError("⚠️ CONNECTION FAILED: Unable to reach server. Check your connection and retry.");
+        } finally {
             setIsSubmitting(false);
-        }, 1500);
+        }
     };
+
+    // --- Loading States ---
+
+    const isLoading = contextLoading || goalsLoading || modeLoading;
+
+    if (isLoading) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] pb-32">
+                <div className="max-w-4xl mx-auto px-6 md:px-12">
+                    <div className="flex flex-col items-center justify-center py-24">
+                        <div className="w-3 h-3 bg-blue-500 animate-pulse mb-4"></div>
+                        <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">
+                            Loading Contract Data...
+                        </p>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    // --- No Active Group State ---
+
+    if (!groupId) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] pb-32">
+                <div className="max-w-4xl mx-auto px-6 md:px-12">
+                    <Header pageState="DECLARATION" />
+                    <div className="p-8 border border-yellow-900/50 bg-yellow-950/10 text-center">
+                        <h2 className="text-xl font-bold text-yellow-500 tracking-[0.2em] uppercase mb-2">
+                            No Active Group
+                        </h2>
+                        <p className="text-sm font-mono text-yellow-600/80">
+                            {contextError || "You must join a group before creating daily contracts."}
+                        </p>
+                        <a
+                            href="/groups"
+                            className="inline-block mt-6 px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-black font-bold tracking-[0.2em] text-xs uppercase transition-colors"
+                        >
+                            Join a Group
+                        </a>
+                    </div>
+                </div>
+            </main>
+        );
+    }
 
     // --- Components ---
-
-    const Header = () => (
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 py-8 border-b border-[#1E293B]">
-            <div>
-                <h1 className="text-3xl font-bold text-white tracking-[0.2em] uppercase mb-2">Daily Contract</h1>
-                <p className="text-xs font-mono text-gray-500 uppercase">Valid for one day only // {new Date().toLocaleDateString()}</p>
-            </div>
-            <div className="mt-4 md:mt-0 text-right">
-                {/* Dev State Toggler */}
-                <div className="flex gap-2 mb-2 justify-end opacity-20 hover:opacity-100 transition-opacity">
-                    {(["DECLARATION", "EXECUTION", "RESOLUTION", "FAILED"] as PageState[]).map(s => (
-                        <button key={s} onClick={() => setState(s)} className={`text-[9px] border p-1 ${state === s ? 'bg-white text-black' : 'text-gray-500'}`}>{s[0]}</button>
-                    ))}
-                </div>
-                <div className="text-xl font-mono text-white font-bold tracking-widest">
-                    {state === "DECLARATION" && "04:12:33 REMAINING"}
-                    {state === "EXECUTION" && "EXECUTION LOCKED"}
-                    {state === "RESOLUTION" && "RESOLUTION OPEN"}
-                    {state === "FAILED" && "CONTRACT VOID"}
-                </div>
-            </div>
-        </div>
-    );
-
-    const SystemNotice = () => {
-        const notices: Record<PageState, { title: string; subtitle: string; color: string }> = {
-            DECLARATION: { title: "DECLARATION REQUIRED", subtitle: "Define clear, falsifiable outcomes.", color: "text-blue-500" },
-            EXECUTION: { title: "EXECUTION LOCKED", subtitle: "No intervention permitted.", color: "text-gray-500" },
-            RESOLUTION: { title: "RESOLUTION REQUIRED", subtitle: "Report outcomes truthfully.", color: "text-yellow-500" },
-            FAILED: { title: "DAY FAILED", subtitle: "System record updated.", color: "text-red-500" }
-        };
-
-        const current = notices[state];
-
-        return (
-            <div className="mb-12 border-l-2 border-[#1E293B] pl-6 py-2">
-                <h2 className={`text-sm font-bold tracking-[0.2em] uppercase mb-1 ${current.color}`}>{current.title}</h2>
-                <p className="text-xs font-mono text-gray-400">{current.subtitle}</p>
-            </div>
-        );
-    };
-
-    // --- Render based on State ---
 
     return (
         <main className="min-h-screen bg-[#0a0e14] pb-32">
             <div className="max-w-4xl mx-auto px-6 md:px-12">
-                <Header />
-                <SystemNotice />
+                <Header pageState={pageState} />
+                <SystemNotice pageState={pageState} />
+
+                {/* Error Banner */}
+                {submitError && (
+                    <div className="mb-8 p-4 border border-red-900/50 bg-red-950/20 flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-mono text-red-400">{submitError}</p>
+                        </div>
+                        <button
+                            onClick={() => setSubmitError(null)}
+                            className="text-red-600 hover:text-red-400 font-mono text-xs ml-4"
+                        >
+                            [DISMISS]
+                        </button>
+                    </div>
+                )}
+
+                {/* Goals Error */}
+                {goalsError && (
+                    <div className="mb-8 p-4 border border-orange-900/50 bg-orange-950/20">
+                        <p className="text-sm font-mono text-orange-400">⚠️ {goalsError}</p>
+                    </div>
+                )}
 
                 {/* DECLARATION STATE */}
-                {state === "DECLARATION" && (
-                    <div className="space-y-12">
-                        <section>
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xs font-bold text-gray-500 tracking-[0.2em] uppercase">Contract Terms</h3>
-                                <span className="text-[10px] font-mono text-gray-600">{goals.length} / 3 OBLIGATIONS</span>
-                            </div>
-
-                            <div className="space-y-4">
-                                {goals.map((goal, i) => (
-                                    <motion.div layout key={goal.id} className="p-6 border border-[#1E293B] bg-[#0B101A] flex justify-between items-center group">
-                                        <div>
-                                            <div className="text-[10px] text-blue-500 font-bold tracking-widest mb-1">CLAUSE 0{i + 1}</div>
-                                            <div className="text-white font-mono text-sm">{goal.text}</div>
-                                            <div className="text-[10px] text-gray-600 mt-1 uppercase">{goal.metricValue} {goal.metricType} {goal.discomfort && "// DISCOMFORT"}</div>
-                                        </div>
-                                        <button onClick={() => removeGoal(goal.id)} className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all font-mono text-xs">[DELETE]</button>
-                                    </motion.div>
-                                ))}
-
-                                {goals.length < 3 && (
-                                    <div className="p-6 border border-dashed border-[#1E293B] bg-[#0B101A]/30">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                            <input
-                                                value={newGoal.text}
-                                                onChange={(e) => setNewGoal({ ...newGoal, text: e.target.value })}
-                                                placeholder="Goal Description (e.g. Complete Backend API)"
-                                                className="bg-transparent border-b border-[#334155] text-white p-2 font-mono text-sm focus:border-blue-500 outline-none w-full"
-                                            />
-                                            <div className="flex gap-4">
-                                                <select
-                                                    value={newGoal.metricType}
-                                                    onChange={(e) => setNewGoal({ ...newGoal, metricType: e.target.value })}
-                                                    className="bg-[#050810] border border-[#334155] text-xs text-gray-400 p-2 font-mono outline-none"
-                                                >
-                                                    <option value="BINARY">Binary (Done/Not)</option>
-                                                    <option value="HOURS">Hours</option>
-                                                    <option value="COUNT">Count</option>
-                                                </select>
-                                                <input
-                                                    value={newGoal.metricValue}
-                                                    onChange={(e) => setNewGoal({ ...newGoal, metricValue: e.target.value })}
-                                                    placeholder="Val"
-                                                    className="bg-transparent border-b border-[#334155] text-white p-2 font-mono text-sm focus:border-blue-500 outline-none w-20"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={newGoal.discomfort}
-                                                    onChange={(e) => setNewGoal({ ...newGoal, discomfort: e.target.checked })}
-                                                    className="w-3 h-3 border border-gray-600 bg-transparent"
-                                                />
-                                                <span className="text-[10px] text-gray-500 tracking-widest uppercase">Discomfort Protocol</span>
-                                            </label>
-                                            <button onClick={addGoal} disabled={!newGoal.text} className="disabled:opacity-30 px-4 py-2 bg-[#1E293B] hover:bg-blue-900 text-white text-[10px] tracking-widest uppercase transition-colors">
-                                                Add Clause
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </section>
-
-                        <div className="pt-8 border-t border-[#1E293B] text-center">
-                            <button
-                                onClick={lockContract}
-                                disabled={goals.length === 0 || isSubmitting}
-                                className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white px-12 py-4 font-bold tracking-[0.2em] text-sm uppercase transition-all shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)]"
-                            >
-                                {isSubmitting ? "Locking..." : "Lock Contract For Today"}
-                            </button>
-                            <p className="mt-4 text-[10px] text-gray-500 font-mono">
-                                This contract cannot be altered once submitted.
-                            </p>
-                        </div>
-                    </div>
+                {pageState === "DECLARATION" && (
+                    <DeclarationState
+                        localGoals={localGoals}
+                        newGoal={newGoal}
+                        setNewGoal={setNewGoal}
+                        addGoal={addGoal}
+                        removeGoal={removeGoal}
+                        lockContract={lockContract}
+                        isSubmitting={isSubmitting}
+                        existingGoals={existingGoals}
+                    />
                 )}
 
                 {/* EXECUTION STATE */}
-                {state === "EXECUTION" && (
-                    <div className="space-y-12">
-                        <div className="p-12 border border-[#1E293B] bg-[#0B101A] flex flex-col items-center justify-center text-center">
-                            <div className="w-3 h-3 bg-blue-500 animate-pulse mb-4"></div>
-                            <h2 className="text-xl font-bold text-white tracking-[0.3em] uppercase mb-2">Contract Active</h2>
-                            <p className="text-xs font-mono text-gray-500">Execution in progress. No intervention permitted.</p>
-                        </div>
-
-                        <div className="opacity-50 pointer-events-none">
-                            {goals.length === 0 && <div className="text-center text-gray-600 font-mono text-xs">No goals declared (Debug View)</div>}
-                            {goals.map((goal, i) => (
-                                <div key={goal.id} className="p-6 border-b border-[#1E293B] flex justify-between items-center">
-                                    <div>
-                                        <div className="text-[10px] text-gray-500 font-bold tracking-widest mb-1">CLAUSE 0{i + 1}</div>
-                                        <div className="text-white font-mono text-sm">{goal.text}</div>
-                                    </div>
-                                    <div className="text-[10px] text-gray-600 uppercase border border-gray-800 px-2 py-1">LOCKED</div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-[#0a0e14] border-t border-[#1E293B] flex justify-center z-40">
-                            <button disabled className="w-full md:w-auto px-8 py-3 bg-[#1E293B] text-gray-500 font-bold tracking-[0.2em] text-[10px] uppercase cursor-not-allowed">
-                                Action Locked By System
-                            </button>
-                        </div>
-                    </div>
+                {pageState === "EXECUTION" && (
+                    <ExecutionState goals={existingGoals} localGoals={localGoals} />
                 )}
 
                 {/* RESOLUTION STATE */}
-                {state === "RESOLUTION" && (
-                    <div className="space-y-8">
-                        {goals.map((goal, i) => (
-                            <div key={goal.id} className="p-8 border border-[#1E293B] bg-[#0B101A]">
-                                <div className="mb-6">
-                                    <div className="text-[10px] text-yellow-600 font-bold tracking-widest mb-1">RESOLUTION REQUIRED // CLAUSE 0{i + 1}</div>
-                                    <div className="text-xl text-white font-mono">{goal.text}</div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button className="py-4 border border-[#334155] hover:bg-green-900/20 hover:border-green-800 text-gray-400 hover:text-green-500 font-bold tracking-[0.2em] text-xs uppercase transition-all">
-                                        Completed
-                                    </button>
-                                    <button className="py-4 border border-[#334155] hover:bg-red-900/20 hover:border-red-800 text-gray-400 hover:text-red-500 font-bold tracking-[0.2em] text-xs uppercase transition-all group relative overflow-hidden">
-                                        Failed
-                                        <div className="absolute inset-0 bg-red-900/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-
-                        <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-[#0a0e14] border-t border-[#1E293B] flex justify-center z-40">
-                            <button className="w-full md:w-auto px-12 py-4 bg-white text-black hover:bg-gray-200 font-bold tracking-[0.2em] text-xs uppercase transition-colors shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)]">
-                                Submit Outcomes
-                            </button>
-                        </div>
-                    </div>
+                {pageState === "RESOLUTION" && (
+                    <ResolutionState goals={existingGoals} />
                 )}
 
                 {/* FAILED STATE */}
-                {state === "FAILED" && (
-                    <div className="flex flex-col items-center justify-center py-24 border border-red-900/30 bg-red-950/5">
-                        <h1 className="text-4xl md:text-6xl font-black text-red-600 tracking-tighter uppercase mb-4">DAY FAILED</h1>
-                        <p className="text-red-400 font-mono text-sm tracking-widest uppercase">System Record Updated</p>
-                        <div className="mt-12 p-4 border border-red-900/50 bg-[#0a0e14]">
-                            <code className="text-xs text-red-700 font-mono">ERR_PROTOCOL_VIOLATION_0X1</code>
-                        </div>
-                    </div>
-                )}
-
+                {pageState === "FAILED" && <FailedState />}
             </div>
         </main>
+    );
+}
+
+// --- Sub-Components ---
+
+function Header({ pageState }: { pageState: PageState }) {
+    return (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 py-8 border-b border-[#1E293B]">
+            <div>
+                <h1 className="text-3xl font-bold text-white tracking-[0.2em] uppercase mb-2">
+                    Daily Contract
+                </h1>
+                <p className="text-xs font-mono text-gray-500 uppercase">
+                    Valid for one day only // {new Date().toLocaleDateString()}
+                </p>
+            </div>
+            <div className="mt-4 md:mt-0 text-right">
+                <div className="text-xl font-mono text-white font-bold tracking-widest">
+                    {pageState === "DECLARATION" && "DECLARATION OPEN"}
+                    {pageState === "EXECUTION" && "EXECUTION LOCKED"}
+                    {pageState === "RESOLUTION" && "RESOLUTION OPEN"}
+                    {pageState === "FAILED" && "CONTRACT VOID"}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SystemNotice({ pageState }: { pageState: PageState }) {
+    const notices: Record<PageState, { title: string; subtitle: string; color: string }> = {
+        DECLARATION: {
+            title: "DECLARATION REQUIRED",
+            subtitle: "Define clear, falsifiable outcomes.",
+            color: "text-blue-500",
+        },
+        EXECUTION: {
+            title: "EXECUTION LOCKED",
+            subtitle: "No intervention permitted.",
+            color: "text-gray-500",
+        },
+        RESOLUTION: {
+            title: "RESOLUTION REQUIRED",
+            subtitle: "Report outcomes truthfully.",
+            color: "text-yellow-500",
+        },
+        FAILED: {
+            title: "DAY FAILED",
+            subtitle: "System record updated.",
+            color: "text-red-500",
+        },
+    };
+
+    const current = notices[pageState];
+
+    return (
+        <div className="mb-12 border-l-2 border-[#1E293B] pl-6 py-2">
+            <h2 className={`text-sm font-bold tracking-[0.2em] uppercase mb-1 ${current.color}`}>
+                {current.title}
+            </h2>
+            <p className="text-xs font-mono text-gray-400">{current.subtitle}</p>
+        </div>
+    );
+}
+
+function DeclarationState({
+    localGoals,
+    newGoal,
+    setNewGoal,
+    addGoal,
+    removeGoal,
+    lockContract,
+    isSubmitting,
+    existingGoals,
+}: {
+    localGoals: LocalGoal[];
+    newGoal: { text: string; category: GoalCategory; finishCondition: string; isUncomfortable: boolean };
+    setNewGoal: (goal: { text: string; category: GoalCategory; finishCondition: string; isUncomfortable: boolean }) => void;
+    addGoal: () => void;
+    removeGoal: (id: string) => void;
+    lockContract: () => void;
+    isSubmitting: boolean;
+    existingGoals: Goal[];
+}) {
+    // If goals already exist, show them as locked
+    if (existingGoals.length > 0) {
+        return (
+            <div className="space-y-12">
+                <div className="p-6 border border-green-900/50 bg-green-950/10 text-center">
+                    <h3 className="text-sm font-bold text-green-500 tracking-[0.2em] uppercase mb-2">
+                        Contract Already Locked
+                    </h3>
+                    <p className="text-xs font-mono text-green-600/80">
+                        Goals have been submitted for today. No modifications allowed.
+                    </p>
+                </div>
+                <div className="space-y-4 opacity-50">
+                    {existingGoals.map((goal, i) => (
+                        <div
+                            key={goal.id}
+                            className="p-6 border border-[#1E293B] bg-[#0B101A] flex justify-between items-center"
+                        >
+                            <div>
+                                <div className="text-[10px] text-green-500 font-bold tracking-widest mb-1">
+                                    CLAUSE 0{i + 1} • {goal.category}
+                                </div>
+                                <div className="text-white font-mono text-sm">{goal.title}</div>
+                                <div className="text-[10px] text-gray-600 mt-1 uppercase">
+                                    {goal.finishCondition}
+                                    {goal.isUncomfortable && " // DISCOMFORT"}
+                                </div>
+                            </div>
+                            <div className="text-[10px] text-green-600 uppercase border border-green-800 px-2 py-1">
+                                LOCKED
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-12">
+            <section>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xs font-bold text-gray-500 tracking-[0.2em] uppercase">
+                        Contract Terms
+                    </h3>
+                    <span className="text-[10px] font-mono text-gray-600">
+                        {localGoals.length} / 3 OBLIGATIONS
+                    </span>
+                </div>
+
+                <div className="space-y-4">
+                    {localGoals.map((goal, i) => (
+                        <motion.div
+                            layout
+                            key={goal.id}
+                            className="p-6 border border-[#1E293B] bg-[#0B101A] flex justify-between items-center group"
+                        >
+                            <div>
+                                <div className="text-[10px] text-blue-500 font-bold tracking-widest mb-1">
+                                    CLAUSE 0{i + 1} • {CATEGORY_LABELS[goal.category]}
+                                </div>
+                                <div className="text-white font-mono text-sm">{goal.text}</div>
+                                <div className="text-[10px] text-gray-600 mt-1 uppercase">
+                                    {goal.finishCondition}
+                                    {goal.isUncomfortable && " // DISCOMFORT"}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => removeGoal(goal.id)}
+                                className="text-gray-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all font-mono text-xs"
+                            >
+                                [DELETE]
+                            </button>
+                        </motion.div>
+                    ))}
+
+                    {localGoals.length < 3 && (
+                        <div className="p-6 border border-dashed border-[#1E293B] bg-[#0B101A]/30">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <input
+                                    value={newGoal.text}
+                                    onChange={(e) => setNewGoal({ ...newGoal, text: e.target.value })}
+                                    placeholder="Goal Description (e.g. Complete Backend API)"
+                                    className="bg-transparent border-b border-[#334155] text-white p-2 font-mono text-sm focus:border-blue-500 outline-none w-full"
+                                />
+                                <div className="flex gap-4">
+                                    <select
+                                        value={newGoal.category}
+                                        onChange={(e) =>
+                                            setNewGoal({ ...newGoal, category: e.target.value as GoalCategory })
+                                        }
+                                        className="bg-[#050810] border border-[#334155] text-xs text-gray-400 p-2 font-mono outline-none"
+                                    >
+                                        <option value="STUDY">Study</option>
+                                        <option value="HEALTH">Health</option>
+                                        <option value="CAREER">Career</option>
+                                        <option value="BUILD">Build</option>
+                                        <option value="SOCIAL">Social</option>
+                                    </select>
+                                    <input
+                                        value={newGoal.finishCondition}
+                                        onChange={(e) =>
+                                            setNewGoal({ ...newGoal, finishCondition: e.target.value })
+                                        }
+                                        placeholder="Finish Condition"
+                                        className="bg-transparent border-b border-[#334155] text-white p-2 font-mono text-sm focus:border-blue-500 outline-none flex-1"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={newGoal.isUncomfortable}
+                                        onChange={(e) =>
+                                            setNewGoal({ ...newGoal, isUncomfortable: e.target.checked })
+                                        }
+                                        className="w-3 h-3 border border-gray-600 bg-transparent"
+                                    />
+                                    <span className="text-[10px] text-gray-500 tracking-widest uppercase">
+                                        Discomfort Protocol
+                                    </span>
+                                </label>
+                                <button
+                                    onClick={addGoal}
+                                    disabled={!newGoal.text.trim() || !newGoal.finishCondition.trim()}
+                                    className="disabled:opacity-30 px-4 py-2 bg-[#1E293B] hover:bg-blue-900 text-white text-[10px] tracking-widest uppercase transition-colors"
+                                >
+                                    Add Clause
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </section>
+
+            <div className="pt-8 border-t border-[#1E293B] text-center">
+                <button
+                    onClick={lockContract}
+                    disabled={localGoals.length === 0 || isSubmitting}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white px-12 py-4 font-bold tracking-[0.2em] text-sm uppercase transition-all shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)]"
+                >
+                    {isSubmitting ? (
+                        <span className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-white animate-pulse"></span>
+                            Locking...
+                        </span>
+                    ) : (
+                        "Lock Contract For Today"
+                    )}
+                </button>
+                <p className="mt-4 text-[10px] text-gray-500 font-mono">
+                    This contract cannot be altered once submitted.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+function ExecutionState({ goals, localGoals }: { goals: Goal[]; localGoals: LocalGoal[] }) {
+    // Use existing goals from API, fall back to local goals for immediate UI update
+    const displayGoals = goals.length > 0 ? goals : localGoals;
+
+    return (
+        <div className="space-y-12">
+            <div className="p-12 border border-[#1E293B] bg-[#0B101A] flex flex-col items-center justify-center text-center">
+                <div className="w-3 h-3 bg-blue-500 animate-pulse mb-4"></div>
+                <h2 className="text-xl font-bold text-white tracking-[0.3em] uppercase mb-2">
+                    Contract Active
+                </h2>
+                <p className="text-xs font-mono text-gray-500">
+                    Execution in progress. No intervention permitted.
+                </p>
+            </div>
+
+            <div className="opacity-50 pointer-events-none">
+                {displayGoals.length === 0 && (
+                    <div className="text-center text-gray-600 font-mono text-xs">
+                        No goals declared
+                    </div>
+                )}
+                {displayGoals.map((goal, i) => {
+                    // Handle both Goal and LocalGoal types
+                    const title = "title" in goal ? goal.title : goal.text;
+                    const category = goal.category;
+                    const isUncomfortable = "isUncomfortable" in goal ? goal.isUncomfortable : false;
+
+                    return (
+                        <div
+                            key={goal.id}
+                            className="p-6 border-b border-[#1E293B] flex justify-between items-center"
+                        >
+                            <div>
+                                <div className="text-[10px] text-gray-500 font-bold tracking-widest mb-1">
+                                    CLAUSE 0{i + 1} • {category}
+                                    {isUncomfortable && " • DISCOMFORT"}
+                                </div>
+                                <div className="text-white font-mono text-sm">{title}</div>
+                            </div>
+                            <div className="text-[10px] text-gray-600 uppercase border border-gray-800 px-2 py-1">
+                                LOCKED
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-[#0a0e14] border-t border-[#1E293B] flex justify-center z-40">
+                <button
+                    disabled
+                    className="w-full md:w-auto px-8 py-3 bg-[#1E293B] text-gray-500 font-bold tracking-[0.2em] text-[10px] uppercase cursor-not-allowed"
+                >
+                    Action Locked By System
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function ResolutionState({ goals }: { goals: Goal[] }) {
+    return (
+        <div className="space-y-8">
+            {goals.length === 0 && (
+                <div className="text-center text-gray-600 font-mono text-xs py-12">
+                    No goals to resolve
+                </div>
+            )}
+            {goals.map((goal, i) => (
+                <div key={goal.id} className="p-8 border border-[#1E293B] bg-[#0B101A]">
+                    <div className="mb-6">
+                        <div className="text-[10px] text-yellow-600 font-bold tracking-widest mb-1">
+                            RESOLUTION REQUIRED // CLAUSE 0{i + 1}
+                        </div>
+                        <div className="text-xl text-white font-mono">{goal.title}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                            {goal.category} • {goal.finishCondition}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <button className="py-4 border border-[#334155] hover:bg-green-900/20 hover:border-green-800 text-gray-400 hover:text-green-500 font-bold tracking-[0.2em] text-xs uppercase transition-all">
+                            Completed
+                        </button>
+                        <button className="py-4 border border-[#334155] hover:bg-red-900/20 hover:border-red-800 text-gray-400 hover:text-red-500 font-bold tracking-[0.2em] text-xs uppercase transition-all group relative overflow-hidden">
+                            Failed
+                            <div className="absolute inset-0 bg-red-900/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                        </button>
+                    </div>
+                </div>
+            ))}
+
+            {goals.length > 0 && (
+                <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-[#0a0e14] border-t border-[#1E293B] flex justify-center z-40">
+                    <button className="w-full md:w-auto px-12 py-4 bg-white text-black hover:bg-gray-200 font-bold tracking-[0.2em] text-xs uppercase transition-colors shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)]">
+                        Submit Outcomes
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function FailedState() {
+    return (
+        <div className="flex flex-col items-center justify-center py-24 border border-red-900/30 bg-red-950/5">
+            <h1 className="text-4xl md:text-6xl font-black text-red-600 tracking-tighter uppercase mb-4">
+                DAY FAILED
+            </h1>
+            <p className="text-red-400 font-mono text-sm tracking-widest uppercase">
+                System Record Updated
+            </p>
+            <div className="mt-12 p-4 border border-red-900/50 bg-[#0a0e14]">
+                <code className="text-xs text-red-700 font-mono">ERR_PROTOCOL_VIOLATION_0X1</code>
+            </div>
+        </div>
     );
 }
