@@ -121,9 +121,9 @@ function DashboardContent() {
                             <div className="text-xs text-gray-500 uppercase tracking-widest mb-4">Efficiency</div>
 
                             <div className="border-t border-[#1E293B] pt-4">
-                                <div className="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Excuse Debt</div>
+                                <div className="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Active Liabilities</div>
                                 <div className="text-sm text-red-400 font-mono">
-                                    {metrics.excuseDebt} active liabilities
+                                    {metrics.activeLiabilities} pending penalties
                                 </div>
                             </div>
                         </div>

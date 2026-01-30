@@ -17,6 +17,51 @@ router.get(
   }
 );
 
+router.get(
+  "/:groupId/:month",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { groupId, month } = req.params;
+
+      // Validate month format (YYYY-MM)
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        return res.status(400).json({ error: "Invalid month format. Use YYYY-MM" });
+      }
+
+      // Verify user is a member of this group for the specified month
+      const membership = await prisma.membership.findUnique({
+        where: {
+          userId_groupId_month: {
+            userId: req.user!.id,
+            groupId,
+            month,
+          },
+        },
+      });
+
+      if (!membership) {
+        return res.status(403).json({ error: "Not a member of this group for the specified month" });
+      }
+
+      // Fetch penalties for this user, group, and month
+      const penalties = await prisma.penaltyAssignment.findMany({
+        where: {
+          userId: req.user!.id,
+          groupId,
+          month,
+        },
+        orderBy: { dueDate: "asc" },
+      });
+
+      res.json(penalties);
+    } catch (err) {
+      console.error("Penalty fetch error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 router.post(
   "/:penaltyId/complete",
   requireAuth,
@@ -41,7 +86,95 @@ router.post(
       },
     });
 
+    // Create audit log entry
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        groupId: penalty.groupId,
+        action: "PENALTY_COMPLETED",
+        targetType: "PenaltyAssignment",
+        targetId: penalty.id,
+        source: "USER",
+        metadata: {
+          penaltyType: penalty.penaltyType,
+        },
+      },
+    });
+
     res.json({ message: "Penalty completed" });
+  }
+);
+
+router.post(
+  "/:penaltyId/appeal",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { reason } = req.body;
+
+      // Validate appeal reason
+      if (!reason || typeof reason !== 'string' || reason.trim().length < 20) {
+        return res.status(400).json({ 
+          error: "Appeal reason must be at least 20 characters" 
+        });
+      }
+
+      if (reason.length > 500) {
+        return res.status(400).json({ 
+          error: "Appeal reason cannot exceed 500 characters" 
+        });
+      }
+
+      // Fetch and validate penalty ownership
+      const penalty = await prisma.penaltyAssignment.findUnique({
+        where: { id: req.params.penaltyId },
+      });
+
+      if (!penalty) {
+        return res.status(404).json({ error: "Penalty not found" });
+      }
+
+      if (penalty.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+
+      // Check status is PENDING or FAILED
+      if (penalty.status !== "PENDING" && penalty.status !== "FAILED") {
+        return res.status(400).json({ 
+          error: `Cannot appeal ${penalty.status} penalty. Only PENDING or FAILED penalties can be appealed.` 
+        });
+      }
+
+      // Update penalty status to APPEALED
+      const updatedPenalty = await prisma.penaltyAssignment.update({
+        where: { id: penalty.id },
+        data: {
+          status: "APPEALED",
+          appealReason: reason.trim(),
+        },
+      });
+
+      // Create audit log entry
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user!.id,
+          groupId: penalty.groupId,
+          action: "PENALTY_APPEALED",
+          targetType: "PenaltyAssignment",
+          targetId: penalty.id,
+          source: "USER",
+          metadata: {
+            penaltyType: penalty.penaltyType,
+            appealReason: reason.trim(),
+          },
+        },
+      });
+
+      res.json(updatedPenalty);
+    } catch (err) {
+      console.error("Penalty appeal error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
   }
 );
 

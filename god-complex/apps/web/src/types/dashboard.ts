@@ -51,7 +51,7 @@ export interface FailureDetail {
 
 export interface DashboardMetrics {
     efficiency: number; // 0-100
-    excuseDebt: number; // count of active liabilities
+    activeLiabilities: number; // count of PENDING penalties
     failureMomentum: number; // recent failure trend
     pattern?: string | null; // e.g., "Inconsistent Execution"
     declarationDelta?: number | null;
@@ -71,6 +71,27 @@ export interface MonthlyProjection {
     score: number;
     averageDailyScore?: number;
     activeDays?: number;
+}
+
+// --- Penalty Types ---
+
+export type PenaltyStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'APPEALED' | 'RESOLVED';
+export type PenaltyVerdict = 'UPHELD' | 'REVERSED';
+
+export interface PenaltyAssignment {
+    id: string;
+    userId: string;
+    groupId: string;
+    month: string;
+    penaltyType: string;
+    dueDate: string;
+    status: PenaltyStatus;
+    appealReason?: string;
+    resolutionNotes?: string;
+    verdict?: PenaltyVerdict;
+    resolvedAt?: string;
+    createdAt: string;
+    completedAt?: string;
 }
 
 // --- Group Types ---

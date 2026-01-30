@@ -127,6 +127,7 @@ export function Sidebar() {
                 <SectionHeader label="Operations" />
                 <SidebarItem href="/contract" label="Daily Contract" icon={IconOperations} />
                 <SidebarItem href="/groups" label="Groups" icon={IconOperations} />
+                <SidebarItem href="/penalties" label="Penalties" icon={IconOperations} />
 
                 <SectionHeader label="Records" />
                 <SidebarItem href="/weekly-review" label="Weekly Review" icon={IconRecords} />

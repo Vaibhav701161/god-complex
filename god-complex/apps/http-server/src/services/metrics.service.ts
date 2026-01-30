@@ -2,7 +2,7 @@ import { prisma } from "@god-complex/prisma";
 
 export interface MetricsResult {
     efficiency: number;
-    excuseDebt: number;
+    activeLiabilities: number;
     failureMomentum: number;
     pattern: string | null;
     declarationDelta: number | null;
@@ -66,20 +66,21 @@ export async function getDashboardMetrics(groupId: string, userId: string): Prom
 
     const failureMomentum = recentFailures;
 
-    // --- EXCUSE DEBT ---
-    // Count unique excuses in last 7 days
-    const excuses = new Set(
-        recentGoals
-            .map(g => g.result?.failureReason)
-            .filter(r => r && r !== 'SYSTEM_ASSIGNED' && (r as any) !== 'NO_EXCUSE')
-    );
-    const excuseDebt = excuses.size;
+    // --- ACTIVE LIABILITIES ---
+    // Count PENDING penalties for this user in this group
+    const activeLiabilities = await prisma.penaltyAssignment.count({
+        where: {
+            userId,
+            groupId,
+            status: 'PENDING'
+        }
+    });
 
     // --- PATTERN CLASSIFICATION ---
     let pattern: string | null = null;
     if (failureMomentum > 4) pattern = "High Failure Rate";
-    else if (excuseDebt > 2) pattern = "Excuse Dependency";
-    else if (failureMomentum > 0 && excuseDebt === 0) pattern = "Silent Failure";
+    else if (activeLiabilities > 2) pattern = "Penalty Burden";
+    else if (failureMomentum > 0 && activeLiabilities === 0) pattern = "Silent Failure";
     else if (failureMomentum === 0 && totalDeclared > 5) pattern = "Consistent Execution";
 
     // --- DECLARATION DELTA ---
@@ -109,7 +110,7 @@ export async function getDashboardMetrics(groupId: string, userId: string): Prom
 
     return {
         efficiency,
-        excuseDebt,
+        activeLiabilities,
         failureMomentum,
         pattern,
         declarationDelta,
@@ -117,7 +118,7 @@ export async function getDashboardMetrics(groupId: string, userId: string): Prom
             declaredGoals: totalDeclared,
             completedGoals: completed,
             failedGoals: monthGoals.filter(g => g.result?.status === 'FAILED').length,
-            activeExcuses: excuseDebt,
+            activeExcuses: activeLiabilities,
             avgDailyGoals7Day: avgDailyGoals
         }
     };
