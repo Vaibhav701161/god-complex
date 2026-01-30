@@ -1,6 +1,25 @@
 import { prisma } from "@god-complex/prisma";
 import { assertMembership } from "@/lib/guards";
 import { assignMonthlyPenalties } from "./penalty.service";
+import { logAudit } from "./audit.service";
+
+/**
+ * Computes UTC date boundaries for a given month string ("YYYY-MM").
+ * Returns inclusive start (first day of month at 00:00:00 UTC) and
+ * exclusive end (first day of next month at 00:00:00 UTC).
+ */
+function getMonthBoundaries(month: string): { monthStart: Date; nextMonthStart: Date } {
+  const [year, monthNum] = month.split('-').map(Number);
+  
+  // First day of the month at 00:00:00 UTC
+  const monthStart = new Date(Date.UTC(year, monthNum - 1, 1, 0, 0, 0, 0));
+  
+  // First day of the next month at 00:00:00 UTC
+  // Date constructor handles year rollover automatically (month 12 -> next year month 0)
+  const nextMonthStart = new Date(Date.UTC(year, monthNum, 1, 0, 0, 0, 0));
+  
+  return { monthStart, nextMonthStart };
+}
 
 
 export async function getMonthlyResult(
@@ -82,13 +101,15 @@ export async function closeMonth(
       throw new Error(`Cannot close month ${month}: ${pendingDays} days are not finalized.`);
     }
 
-    // Fetch Goals and Calculate
+    // Fetch Goals and Calculate using accurate month boundaries
+    const { monthStart, nextMonthStart } = getMonthBoundaries(month);
+    
     const goals = await tx.goal.findMany({
       where: {
         groupId,
         date: {
-          gte: new Date(`${month}-01`),
-          lt: new Date(`${month}-31`), // Naive month end check
+          gte: monthStart,      // Inclusive: first day of month
+          lt: nextMonthStart,   // Exclusive: first day of next month
         },
       },
       include: { result: true },
@@ -191,5 +212,26 @@ export async function closeMonth(
 
     // Assign Penalties
     await assignMonthlyPenalties(tx, groupId, month, rankingsWithRank);
+
+    // Log audit entry for month close
+    await logAudit(
+      tx,
+      "MONTH_CLOSED",
+      "GROUP_MONTH",
+      `${groupId}:${month}`,
+      null,
+      {
+        participantCount: ranked.length,
+        rankings: rankingsWithRank,
+        monthStart: monthStart.toISOString(),
+        monthEnd: nextMonthStart.toISOString()
+      },
+      groupId,
+      {
+        source: auditContext.source as any,
+        reason: auditContext.reason || "Monthly close completed",
+        correlationId: auditContext.correlationId
+      }
+    );
   });
 }

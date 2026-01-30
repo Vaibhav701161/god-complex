@@ -107,7 +107,7 @@ export async function finalizeDay(
         });
 
         // 5. Create Finalization Record
-        await tx.dailyFinalization.create({
+        const finalization = await tx.dailyFinalization.create({
             data: {
                 groupId,
                 date,
@@ -121,6 +121,27 @@ export async function finalizeDay(
                 }
             }
         });
+
+        // 6. Log audit entry for day finalization
+        await logAudit(
+            tx,
+            "DAY_FINALIZED",
+            "DAILY_FINALIZATION",
+            finalization.id,
+            null,
+            {
+                date,
+                autoFailedCount: missedGoals.length,
+                dayStartUTC: targetBoundaries.dayStartUTC.toISOString(),
+                dayEndUTC: targetBoundaries.dayEndUTC.toISOString()
+            },
+            groupId,
+            {
+                source: auditContext.source as any,
+                reason: auditContext.reason || "Daily finalization completed",
+                correlationId: auditContext.correlationId
+            }
+        );
 
         console.log(`[Finalization] Completed for ${groupId} on ${date}. Failed: ${missedGoals.length}`);
     });
