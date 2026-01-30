@@ -26,6 +26,30 @@ const CATEGORY_LABELS: Record<GoalCategory, string> = {
     SOCIAL: "Social",
 };
 
+// Failure reason types matching Prisma schema (excluding SYSTEM_ASSIGNED which is backend-only)
+type FailureReason = 
+    | "POOR_PLANNING" 
+    | "LOW_ENERGY" 
+    | "DISTRACTION" 
+    | "EXTERNAL_DEPENDENCY" 
+    | "FEAR_AVOIDANCE";
+
+const FAILURE_REASON_LABELS: Record<FailureReason, string> = {
+    POOR_PLANNING: "Poor Planning",
+    LOW_ENERGY: "Low Energy",
+    DISTRACTION: "Distraction",
+    EXTERNAL_DEPENDENCY: "External Dependency",
+    FEAR_AVOIDANCE: "Fear/Avoidance",
+};
+
+// Goal outcome status for resolution
+type GoalOutcomeStatus = "COMPLETED" | "MIN_EFFORT" | "FAILED";
+
+interface GoalOutcome {
+    status: GoalOutcomeStatus;
+    failureReason?: FailureReason;
+}
+
 // Map backend SystemMode to page display state
 type PageState = "DECLARATION" | "EXECUTION" | "RESOLUTION" | "FAILED";
 
@@ -290,7 +314,14 @@ export default function DailyContract() {
 
                 {/* RESOLUTION STATE */}
                 {pageState === "RESOLUTION" && (
-                    <ResolutionState goals={existingGoals} />
+                    <ResolutionState 
+                        goals={existingGoals} 
+                        groupId={groupId!}
+                        currentDate={currentDate}
+                        refetch={refetch}
+                        refetchGoals={refetchGoals}
+                        setPageState={setPageState}
+                    />
                 )}
 
                 {/* FAILED STATE */}
@@ -599,42 +630,352 @@ function ExecutionState({ goals, localGoals }: { goals: Goal[]; localGoals: Loca
     );
 }
 
-function ResolutionState({ goals }: { goals: Goal[] }) {
+function ResolutionState({ 
+    goals, 
+    groupId, 
+    currentDate, 
+    refetch, 
+    refetchGoals,
+    setPageState 
+}: { 
+    goals: Goal[]; 
+    groupId: string;
+    currentDate: string;
+    refetch: () => void;
+    refetchGoals: () => Promise<void>;
+    setPageState: (state: PageState) => void;
+}) {
+    // State for tracking goal outcomes
+    const [goalOutcomes, setGoalOutcomes] = useState<Map<string, GoalOutcome>>(new Map());
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [excuseThrottleWarnings, setExcuseThrottleWarnings] = useState<string[]>([]);
+
+    // Set outcome for a goal
+    const setGoalStatus = (goalId: string, status: GoalOutcomeStatus) => {
+        setGoalOutcomes(prev => {
+            const newMap = new Map(prev);
+            const existing = newMap.get(goalId);
+            if (status === "FAILED") {
+                // Keep existing failure reason if any
+                newMap.set(goalId, { status, failureReason: existing?.failureReason });
+            } else {
+                // Clear failure reason for non-failed goals
+                newMap.set(goalId, { status });
+            }
+            return newMap;
+        });
+        setSubmitError(null);
+    };
+
+    // Set failure reason for a goal
+    const setFailureReason = (goalId: string, reason: FailureReason) => {
+        setGoalOutcomes(prev => {
+            const newMap = new Map(prev);
+            const existing = newMap.get(goalId);
+            if (existing?.status === "FAILED") {
+                newMap.set(goalId, { ...existing, failureReason: reason });
+            }
+            return newMap;
+        });
+        setSubmitError(null);
+    };
+
+    // Validation
+    const allGoalsCheckedIn = goals.every(goal => goalOutcomes.has(goal.id));
+    const allFailedGoalsHaveReasons = goals.every(goal => {
+        const outcome = goalOutcomes.get(goal.id);
+        if (outcome?.status === "FAILED") {
+            return !!outcome.failureReason;
+        }
+        return true;
+    });
+    const canSubmit = allGoalsCheckedIn && allFailedGoalsHaveReasons;
+
+    // Get validation errors for display
+    const getValidationErrors = (): string[] => {
+        const errors: string[] = [];
+        if (!allGoalsCheckedIn) {
+            errors.push("All goals must have an outcome selected");
+        }
+        if (!allFailedGoalsHaveReasons) {
+            errors.push("All failed goals must have a failure reason");
+        }
+        return errors;
+    };
+
+    // Submit check-in
+    const submitCheckin = async () => {
+        if (!canSubmit) {
+            const errors = getValidationErrors();
+            setSubmitError(`⚠️ VALIDATION FAILED: ${errors.join(", ")}`);
+            return;
+        }
+
+        setIsSubmitting(true);
+        setSubmitError(null);
+
+        try {
+            // Build results payload
+            const results = goals.map(goal => {
+                const outcome = goalOutcomes.get(goal.id)!;
+                return {
+                    goalId: goal.id,
+                    status: outcome.status,
+                    ...(outcome.status === "FAILED" && outcome.failureReason 
+                        ? { failureReason: outcome.failureReason } 
+                        : {})
+                };
+            });
+
+            const response = await fetch("/api/daily-checkin/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                    groupId,
+                    date: currentDate,
+                    results,
+                }),
+            });
+
+            if (response.status === 201) {
+                // Success - check for excuse throttling
+                try {
+                    const statusResponse = await fetch(
+                        `/api/daily-checkin/status/${groupId}/${currentDate}`,
+                        { credentials: "include" }
+                    );
+                    
+                    if (statusResponse.ok) {
+                        // API returns array directly, not wrapped in { results: [...] }
+                        const statusResults = await statusResponse.json();
+                        // Check if any submitted reasons were changed to SYSTEM_ASSIGNED
+                        const throttledGoals: string[] = [];
+                        for (const result of statusResults || []) {
+                            const originalOutcome = goalOutcomes.get(result.goalId);
+                            if (
+                                originalOutcome?.status === "FAILED" &&
+                                originalOutcome?.failureReason &&
+                                result.failureReason === "SYSTEM_ASSIGNED"
+                            ) {
+                                const goal = goals.find(g => g.id === result.goalId);
+                                throttledGoals.push(goal?.title || result.goalId);
+                            }
+                        }
+                        if (throttledGoals.length > 0) {
+                            setExcuseThrottleWarnings(throttledGoals);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore status check errors - main submission succeeded
+                    console.warn("Failed to check excuse throttling status:", e);
+                }
+
+                // Refresh data and let system mode determine page state
+                await refetchGoals();
+                refetch();
+                // Don't force FAILED state - let the useEffect derive state from refreshed system mode
+                return;
+            }
+
+            // Handle error responses
+            const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
+            const errorMessage = errorData.message || errorData.error || "Check-in submission failed";
+
+            if (response.status === 403) {
+                setSubmitError("⚠️ CHECK-IN WINDOW CLOSED: This day has passed or is not yet active");
+            } else if (response.status === 400) {
+                // Map specific validation errors
+                const lowerMessage = errorMessage.toLowerCase();
+                if (lowerMessage.includes("all goals must be checked in")) {
+                    setSubmitError("⚠️ INCOMPLETE: All goals must be checked in");
+                } else if (lowerMessage.includes("failure reason required")) {
+                    setSubmitError("⚠️ MISSING REASON: Failure reason required for failed goals");
+                } else if (lowerMessage.includes("no goals found")) {
+                    setSubmitError("⚠️ NO GOALS: No goals found for this day");
+                } else if (lowerMessage.includes("already been checked in")) {
+                    setSubmitError("⚠️ DUPLICATE: One or more goals have already been checked in");
+                } else {
+                    setSubmitError(`⚠️ VALIDATION ERROR: ${errorMessage}`);
+                }
+            } else if (response.status === 500) {
+                setSubmitError("⚠️ SYSTEM ERROR: Server error. Please try again or contact support.");
+            } else {
+                setSubmitError(`⚠️ ERROR: ${errorMessage}`);
+            }
+        } catch (err) {
+            console.error("Check-in submission error:", err);
+            setSubmitError("⚠️ CONNECTION FAILED: Unable to reach server. Check your connection and retry.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <div className="space-y-8">
+            {/* Excuse Throttling Warning */}
+            {excuseThrottleWarnings.length > 0 && (
+                <div className="p-4 border border-yellow-900/50 bg-yellow-950/20 flex justify-between items-start">
+                    <div>
+                        <div className="text-sm font-bold text-yellow-500 tracking-widest uppercase mb-1">
+                            ⚠️ EXCUSE THROTTLING
+                        </div>
+                        <p className="text-sm font-mono text-yellow-400">
+                            One or more failure reasons were overridden by the system due to repeated use (3+ times in 7 days)
+                        </p>
+                        <ul className="mt-2 text-xs font-mono text-yellow-600">
+                            {excuseThrottleWarnings.map((goalTitle, i) => (
+                                <li key={i}>• {goalTitle}</li>
+                            ))}
+                        </ul>
+                    </div>
+                    <button
+                        onClick={() => setExcuseThrottleWarnings([])}
+                        className="text-yellow-600 hover:text-yellow-400 font-mono text-xs ml-4"
+                    >
+                        [DISMISS]
+                    </button>
+                </div>
+            )}
+
+            {/* Error Banner */}
+            {submitError && (
+                <div className="p-4 border border-red-900/50 bg-red-950/20 flex justify-between items-start">
+                    <div>
+                        <p className="text-sm font-mono text-red-400">{submitError}</p>
+                    </div>
+                    <button
+                        onClick={() => setSubmitError(null)}
+                        className="text-red-600 hover:text-red-400 font-mono text-xs ml-4"
+                    >
+                        [DISMISS]
+                    </button>
+                </div>
+            )}
+
             {goals.length === 0 && (
                 <div className="text-center text-gray-600 font-mono text-xs py-12">
                     No goals to resolve
                 </div>
             )}
-            {goals.map((goal, i) => (
-                <div key={goal.id} className="p-8 border border-[#1E293B] bg-[#0B101A]">
-                    <div className="mb-6">
-                        <div className="text-[10px] text-yellow-600 font-bold tracking-widest mb-1">
-                            RESOLUTION REQUIRED // CLAUSE 0{i + 1}
-                        </div>
-                        <div className="text-xl text-white font-mono">{goal.title}</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                            {goal.category} • {goal.finishCondition}
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <button className="py-4 border border-[#334155] hover:bg-green-900/20 hover:border-green-800 text-gray-400 hover:text-green-500 font-bold tracking-[0.2em] text-xs uppercase transition-all">
-                            Completed
-                        </button>
-                        <button className="py-4 border border-[#334155] hover:bg-red-900/20 hover:border-red-800 text-gray-400 hover:text-red-500 font-bold tracking-[0.2em] text-xs uppercase transition-all group relative overflow-hidden">
-                            Failed
-                            <div className="absolute inset-0 bg-red-900/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-                        </button>
+            {goals.map((goal, i) => {
+                const outcome = goalOutcomes.get(goal.id);
+                const isCompleted = outcome?.status === "COMPLETED";
+                const isMinEffort = outcome?.status === "MIN_EFFORT";
+                const isFailed = outcome?.status === "FAILED";
+
+                return (
+                    <div key={goal.id} className="p-8 border border-[#1E293B] bg-[#0B101A]">
+                        <div className="mb-6">
+                            <div className="text-[10px] text-yellow-600 font-bold tracking-widest mb-1">
+                                RESOLUTION REQUIRED // CLAUSE 0{i + 1}
+                            </div>
+                            <div className="text-xl text-white font-mono">{goal.title}</div>
+                            <div className="text-xs text-gray-500 mt-1">
+                                {goal.category} • {goal.finishCondition}
+                            </div>
+                        </div>
+
+                        {/* Outcome Selection Buttons */}
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                            <button
+                                onClick={() => setGoalStatus(goal.id, "COMPLETED")}
+                                className={`py-4 border font-bold tracking-[0.2em] text-xs uppercase transition-all ${
+                                    isCompleted
+                                        ? "border-green-600 bg-green-900/30 text-green-500"
+                                        : "border-[#334155] hover:bg-green-900/20 hover:border-green-800 text-gray-400 hover:text-green-500"
+                                }`}
+                            >
+                                Completed
+                            </button>
+                            <button
+                                onClick={() => setGoalStatus(goal.id, "MIN_EFFORT")}
+                                className={`py-4 border font-bold tracking-[0.2em] text-xs uppercase transition-all ${
+                                    isMinEffort
+                                        ? "border-yellow-600 bg-yellow-900/30 text-yellow-500"
+                                        : "border-[#334155] hover:bg-yellow-900/20 hover:border-yellow-800 text-gray-400 hover:text-yellow-500"
+                                }`}
+                            >
+                                Min Effort
+                            </button>
+                            <button
+                                onClick={() => setGoalStatus(goal.id, "FAILED")}
+                                className={`py-4 border font-bold tracking-[0.2em] text-xs uppercase transition-all relative overflow-hidden ${
+                                    isFailed
+                                        ? "border-red-600 bg-red-900/30 text-red-500"
+                                        : "border-[#334155] hover:bg-red-900/20 hover:border-red-800 text-gray-400 hover:text-red-500"
+                                }`}
+                            >
+                                Failed
+                                {!isFailed && (
+                                    <div className="absolute inset-0 bg-red-900/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Failure Reason Selector */}
+                        {isFailed && (
+                            <div className="mt-4">
+                                <label className="text-[10px] text-red-500 font-bold tracking-widest mb-2 block">
+                                    FAILURE REASON REQUIRED
+                                </label>
+                                <select
+                                    value={outcome?.failureReason || ""}
+                                    onChange={(e) => setFailureReason(goal.id, e.target.value as FailureReason)}
+                                    className="w-full bg-[#050810] border border-[#334155] text-xs text-gray-400 p-3 font-mono outline-none focus:border-red-600"
+                                >
+                                    <option value="">Select failure reason...</option>
+                                    {(Object.keys(FAILURE_REASON_LABELS) as FailureReason[]).map((reason) => (
+                                        <option key={reason} value={reason}>
+                                            {FAILURE_REASON_LABELS[reason]}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Selected Status Display */}
+                        {outcome && (
+                            <div className="mt-4 text-[10px] font-mono text-gray-500 uppercase">
+                                Status: <span className={
+                                    isCompleted ? "text-green-500" : 
+                                    isMinEffort ? "text-yellow-500" : 
+                                    "text-red-500"
+                                }>
+                                    {outcome.status.replace("_", " ")}
+                                </span>
+                                {isFailed && outcome.failureReason && (
+                                    <span className="text-red-400"> • {FAILURE_REASON_LABELS[outcome.failureReason]}</span>
+                                )}
+                            </div>
+                        )}
                     </div>
-                </div>
-            ))}
+                );
+            })}
 
             {goals.length > 0 && (
                 <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-[#0a0e14] border-t border-[#1E293B] flex justify-center z-40">
-                    <button className="w-full md:w-auto px-12 py-4 bg-white text-black hover:bg-gray-200 font-bold tracking-[0.2em] text-xs uppercase transition-colors shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)]">
-                        Submit Outcomes
+                    <button
+                        onClick={submitCheckin}
+                        disabled={!canSubmit || isSubmitting}
+                        className={`w-full md:w-auto px-12 py-4 font-bold tracking-[0.2em] text-xs uppercase transition-colors ${
+                            canSubmit && !isSubmitting
+                                ? "bg-white text-black hover:bg-gray-200 shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)]"
+                                : "bg-[#1E293B] text-gray-500 cursor-not-allowed"
+                        }`}
+                    >
+                        {isSubmitting ? (
+                            <span className="flex items-center gap-2 justify-center">
+                                <span className="w-2 h-2 bg-gray-400 animate-pulse"></span>
+                                Submitting...
+                            </span>
+                        ) : (
+                            "Submit Outcomes"
+                        )}
                     </button>
                 </div>
             )}

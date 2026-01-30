@@ -5,12 +5,49 @@ import { prisma } from "@god-complex/prisma";
 
 const router = Router();
 
+/**
+ * Error messages that map to specific HTTP status codes:
+ * - Temporal errors ("has passed", "future days") -> 403 Forbidden
+ * - Validation errors ("all goals", "no goals", "failure reason", "already checked in") -> 400 Bad Request
+ * - Other errors -> 500 Internal Server Error
+ */
 router.post(
   "/",
   requireAuth,
   async (req, res) => {
-    await submitCheckin(req.user!.id, req.body);
-    res.sendStatus(201);
+    try {
+      await submitCheckin(req.user!.id, req.body);
+      res.sendStatus(201);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      const lowerMessage = message.toLowerCase();
+
+      // Map known temporal errors to 403
+      if (
+        lowerMessage.includes("has passed") ||
+        lowerMessage.includes("future days") ||
+        lowerMessage.includes("window closed")
+      ) {
+        return res.status(403).json({ message });
+      }
+
+      // Map known validation errors to 400
+      if (
+        lowerMessage.includes("all goals must be checked in") ||
+        lowerMessage.includes("no goals found") ||
+        lowerMessage.includes("failure reason required") ||
+        lowerMessage.includes("already been checked in") ||
+        lowerMessage.includes("goal does not belong") ||
+        lowerMessage.includes("group not found") ||
+        lowerMessage.includes("not a member")
+      ) {
+        return res.status(400).json({ message });
+      }
+
+      // Unexpected errors - server issue
+      console.error("Check-in submission error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
   }
 );
 router.get(
