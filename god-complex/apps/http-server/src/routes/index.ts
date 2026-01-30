@@ -10,6 +10,7 @@ import historyRoutes from "./history.routes";
 import stateRoutes from "./state.routes";
 import metricsRoutes from "./metrics.routes";
 import healthRoutes from "./health.routes";
+import penaltyRoutes from "./penalty.routes";
 
 import adminRoutes from "./admin.routes";
 
@@ -25,6 +26,7 @@ router.use("/history", historyRoutes);
 router.use("/state", stateRoutes);
 router.use("/metrics", metricsRoutes);
 router.use("/health", healthRoutes);
+router.use("/penalty", penaltyRoutes);
 router.use("/admin", adminRoutes);
 
 export default router;

@@ -3,6 +3,8 @@
 import { motion } from "framer-motion";
 import { GCLogo } from "@/components/IsometricCube";
 import { useState } from "react";
+import { GroupSelectorDropdown } from "@/components/GroupSelector";
+import { useDashboardContext } from "@/hooks/useDashboardContext";
 
 // --- Types ---
 export type DailyStatus = 'completed' | 'min_effort' | 'failed' | 'pending' | 'locked' | 'auto-fail' | 'none';
@@ -17,6 +19,8 @@ export interface Goal {
 // --- Components ---
 
 export function TopBar({ user }: { user: any }) {
+    const { availableGroups } = useDashboardContext();
+
     return (
         <div className="flex items-center justify-between py-6 px-8 bg-[#050810] border-b border-[#1E293B]">
             <div className="flex items-center gap-3">
@@ -30,6 +34,12 @@ export function TopBar({ user }: { user: any }) {
                 <div className="text-gray-500 text-xs font-mono tracking-widest">
                     {user?.displayName || user?.name || "USER"}
                 </div>
+                {/* Group switcher - only show when multiple groups exist */}
+                {availableGroups.length > 0 && (
+                    <div className="border-l border-[#1E293B] pl-4">
+                        <GroupSelectorDropdown />
+                    </div>
+                )}
                 <div className="text-gray-500 text-xs font-mono tracking-widest">
                     JANUARY 2026
                 </div>
@@ -38,12 +48,16 @@ export function TopBar({ user }: { user: any }) {
     );
 }
 
-export function SystemDemandPanel({ mode, failureMomentum, pattern }: {
-    mode: 'DECLARATION_REQUIRED' | 'EXECUTION_IN_PROGRESS' | 'RESOLUTION_PENDING' | 'DAY_FINALIZED';
+export function SystemDemandPanel({ mode, failureMomentum, pattern, aggregateState }: {
+    mode: 'DECLARATION_REQUIRED' | 'EXECUTION_IN_PROGRESS' | 'RESOLUTION_PENDING' | 'DAY_FINALIZED' | 'AUTO_FAILED';
     failureMomentum: number;
     pattern?: string;
+    aggregateState?: {
+        drivingGroup: { groupName: string } | null;
+        groupStates: any[];
+    };
 }) {
-    const modeConfig = {
+    const modeConfig: Record<typeof mode, { title: string; message: string; buttonText: string }> = {
         DECLARATION_REQUIRED: {
             title: 'Declaration Required',
             message: 'No goals declared for today. Outcomes must be recorded to initiate the protocol.',
@@ -64,9 +78,20 @@ export function SystemDemandPanel({ mode, failureMomentum, pattern }: {
             message: 'All outcomes recorded. System verdict logged.',
             buttonText: 'View Results',
         },
+        AUTO_FAILED: {
+            title: 'Automatic Failure',
+            message: 'Contract violation detected. Penalty enforcement in effect.',
+            buttonText: 'View Status',
+        },
     };
 
-    const config = modeConfig[mode];
+    // Gracefully handle unmapped modes with fallback
+    const config = modeConfig[mode] || {
+        title: 'System Status Unknown',
+        message: 'Unable to determine current system state.',
+        buttonText: 'Refresh',
+    };
+    const hasMultipleGroups = aggregateState && aggregateState.groupStates.length > 1;
 
     return (
         <div className="w-full bg-[#050810] border-y border-[#3B82F6] shadow-[0_0_50px_-20px_rgba(59,130,246,0.5)] p-8 md:p-12 mb-12 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
@@ -77,6 +102,11 @@ export function SystemDemandPanel({ mode, failureMomentum, pattern }: {
                 <div className="flex items-center gap-3">
                     <div className="w-2 h-2 bg-blue-500 animate-ping"></div>
                     <span className="text-blue-500 font-bold tracking-[0.2em] text-sm uppercase">System Demand</span>
+                    {hasMultipleGroups && (
+                        <span className="text-[10px] text-gray-500 font-mono tracking-widest uppercase">
+                            Across {aggregateState.groupStates.length} Groups
+                        </span>
+                    )}
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight uppercase">
                     {config.title}
@@ -84,6 +114,11 @@ export function SystemDemandPanel({ mode, failureMomentum, pattern }: {
                 <p className="text-gray-400 font-mono text-xs md:text-sm max-w-xl mt-2">
                     {config.message}
                 </p>
+                {hasMultipleGroups && aggregateState.drivingGroup && (
+                    <p className="text-blue-400 font-mono text-xs mt-1">
+                        Driven by: {aggregateState.drivingGroup.groupName}
+                    </p>
+                )}
 
                 <div className="flex flex-col gap-1 mt-4 border-l-2 border-red-900/30 pl-4">
                     <div className="text-[10px] text-red-500 font-mono tracking-widest uppercase">

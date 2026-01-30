@@ -19,6 +19,8 @@ export function useMonthlyHistory() {
             }
 
             try {
+                // Clear previous group's history immediately when groupId changes
+                setHistory(new Map());
                 setLoading(true);
 
                 // 🎯 SINGLE BATCH QUERY - Replaces 31 individual calls

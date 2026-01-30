@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "./useAuth";
+
+// Membership structure from backend
+export interface UserMembership {
+    groupId: string;
+    month: string;
+    group: {
+        id: string;
+        name: string;
+        timezone: string;
+        cutoffHour: number;
+    };
+}
 
 interface User {
     id: string;
@@ -14,6 +26,7 @@ interface User {
     displayName?: string;
     motivation?: string;
     createdAt: string;
+    memberships?: UserMembership[];
 }
 
 interface UserState {
@@ -29,6 +42,11 @@ export function useUser() {
         loading: true,
         error: null,
     });
+    const [refetchTrigger, setRefetchTrigger] = useState(0);
+
+    const refetch = useCallback(() => {
+        setRefetchTrigger(prev => prev + 1);
+    }, []);
 
     useEffect(() => {
         let mounted = true;
@@ -99,11 +117,12 @@ export function useUser() {
         return () => {
             mounted = false;
         };
-    }, [isAuthenticated, authLoading, logout]);
+    }, [isAuthenticated, authLoading, logout, refetchTrigger]);
 
     return {
         user: state.user,
         loading: state.loading || authLoading,
         error: state.error,
+        refetch,
     };
 }

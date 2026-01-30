@@ -4,7 +4,8 @@ export type SystemMode =
     | 'DECLARATION_REQUIRED'
     | 'EXECUTION_IN_PROGRESS'
     | 'RESOLUTION_PENDING'
-    | 'DAY_FINALIZED';
+    | 'DAY_FINALIZED'
+    | 'AUTO_FAILED'; // Added to handle aggregate mode edge case
 
 export type DailyStatus =
     | 'completed'
@@ -70,4 +71,50 @@ export interface MonthlyProjection {
     score: number;
     averageDailyScore?: number;
     activeDays?: number;
+}
+
+// --- Group Types ---
+
+export interface Group {
+    id: string;
+    name: string;
+    monthlyPledge: number;
+    cutoffHour: number;
+    timezone: string;
+    creatorId: string;
+    memberCount?: number;
+    creator?: {
+        id: string;
+        name: string;
+        displayName?: string;
+    };
+    memberships?: Membership[];
+}
+
+export interface Membership {
+    userId: string;
+    groupId: string;
+    month: string;
+    joinedAt?: string;
+    user?: {
+        id: string;
+        name: string;
+        displayName?: string;
+    };
+    group?: Group;
+}
+
+export interface GroupJoinRequest {
+    id: string;
+    groupId: string;
+    userId: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    createdAt: string;
+}
+
+export interface CreateGroupInput {
+    name: string;
+    monthlyPledge: number;
+    cutoffHour: number;
+    timezone: string;
 }

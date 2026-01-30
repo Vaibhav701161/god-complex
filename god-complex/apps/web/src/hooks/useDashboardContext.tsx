@@ -1,7 +1,16 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { useUser } from "./useUser";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { useUser, UserMembership } from "./useUser";
+
+const SELECTED_GROUP_KEY = "god_complex_selected_group";
+
+interface AvailableGroup {
+    id: string;
+    name: string;
+    timezone: string;
+    cutoffHour: number;
+}
 
 interface DashboardContextValue {
     groupId: string | null;
@@ -10,74 +19,121 @@ interface DashboardContextValue {
     loading: boolean;
     error: string | null;
     refetch: () => void;
+    // Multi-group support
+    availableGroups: AvailableGroup[];
+    selectedGroupId: string | null;
+    selectGroup: (groupId: string) => void;
+    requiresSelection: boolean; // True when user has >1 group and none selected
+    hasNoGroups: boolean; // True when user has 0 groups
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
-    const { user, loading: userLoading, error: userError } = useUser();
-    const [groupId, setGroupId] = useState<string | null>(null);
+    const { user, loading: userLoading, error: userError, refetch: refetchUser } = useUser();
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refetchTrigger, setRefetchTrigger] = useState(0);
+    const [initialized, setInitialized] = useState(false);
 
     // Compute current date/month (client-side, will need timezone handling later)
     const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const currentMonth = currentDate.slice(0, 7); // YYYY-MM
 
+    // Extract available groups from user memberships
+    const availableGroups: AvailableGroup[] = user?.memberships?.map((m: UserMembership) => ({
+        id: m.groupId,
+        name: m.group?.name || "Unknown Group",
+        timezone: m.group?.timezone || "UTC",
+        cutoffHour: m.group?.cutoffHour ?? 0,
+    })) || [];
+
+    const hasNoGroups = availableGroups.length === 0;
+    const hasSingleGroup = availableGroups.length === 1;
+    const hasMultipleGroups = availableGroups.length > 1;
+
+    // Initialize selected group from localStorage or auto-select
     useEffect(() => {
+        if (userLoading || initialized) return;
+
         if (!user) {
-            setGroupId(null);
+            setSelectedGroupId(null);
             setError(null);
+            setInitialized(true);
             return;
         }
 
-        // Extract groupId with explicit validation
-        const userWithMemberships = user as any; // Type assertion needed until we update User interface
-
-        // INVARIANT 1: Memberships must exist
-        if (!userWithMemberships.memberships) {
-            const errorMsg = "INVARIANT_VIOLATION: User has no memberships array";
-            console.error(errorMsg, user);
-            setError(errorMsg);
-            setGroupId(null);
-            return;
+        // Load stored preference
+        let storedGroupId: string | null = null;
+        try {
+            storedGroupId = localStorage.getItem(SELECTED_GROUP_KEY);
+        } catch {
+            // localStorage may be unavailable
         }
 
-        const activeMemberships = userWithMemberships.memberships;
+        // Validate stored preference against available groups
+        const storedIsValid = storedGroupId && availableGroups.some(g => g.id === storedGroupId);
 
-        // INVARIANT 2: User must have at least one active membership
-        if (activeMemberships.length === 0) {
-            setGroupId(null);
-            setError("No active group membership found for current month");
-            return;
-        }
-
-        // MULTI-GROUP DETECTION: Explicit warning if >1 group
-        if (activeMemberships.length > 1) {
+        if (storedIsValid) {
+            setSelectedGroupId(storedGroupId);
+            setError(null);
+        } else if (hasSingleGroup) {
+            // Auto-select if only one group
+            const onlyGroupId = availableGroups[0].id;
+            setSelectedGroupId(onlyGroupId);
+            try {
+                localStorage.setItem(SELECTED_GROUP_KEY, onlyGroupId);
+            } catch {
+                // Ignore localStorage errors
+            }
+            setError(null);
+        } else if (hasMultipleGroups) {
+            // User must select - don't auto-select
             console.warn(
-                `⚠️  MULTI_GROUP_DETECTED: User has ${activeMemberships.length} active groups for ${currentMonth}.`,
-                'Groups:', activeMemberships.map((m: any) => ({
-                    groupId: m.groupId,
-                    groupName: m.group?.name || 'Unknown'
-                })),
-                'Using first group. Implement group selector UI to allow user choice.'
+                `⚠️  MULTI_GROUP_DETECTED: User has ${availableGroups.length} active groups.`,
+                'Groups:', availableGroups.map(g => ({ id: g.id, name: g.name })),
+                'User must select a group.'
             );
+            setSelectedGroupId(null);
+            setError(null); // Not an error, just needs selection
+        } else {
+            // No groups - not an error, just unbound mode
+            setSelectedGroupId(null);
+            setError(null); // Use hasNoGroups flag instead of error
         }
 
-        // Take first membership (explicit, not silent)
-        const activeGroupId = activeMemberships[0].groupId;
+        setInitialized(true);
+    }, [user, userLoading, initialized, availableGroups, hasSingleGroup, hasMultipleGroups]);
 
-        if (!activeGroupId) {
-            setError("INVALID_STATE: groupId is null in membership");
-            setGroupId(null);
+    // Select group handler
+    const selectGroup = useCallback((groupId: string) => {
+        const groupExists = availableGroups.some(g => g.id === groupId);
+        if (!groupExists) {
+            console.error(`Cannot select group ${groupId}: not in available groups`);
             return;
         }
 
-        setGroupId(activeGroupId);
-        setError(null);
-    }, [user, refetchTrigger, currentMonth]);
+        setSelectedGroupId(groupId);
+        try {
+            localStorage.setItem(SELECTED_GROUP_KEY, groupId);
+        } catch {
+            // Ignore localStorage errors
+        }
 
-    const refetch = () => setRefetchTrigger(prev => prev + 1);
+        // Trigger refetch to reload data for new group
+        setRefetchTrigger(prev => prev + 1);
+    }, [availableGroups]);
+
+    // Determine if selection is required
+    const requiresSelection = hasMultipleGroups && !selectedGroupId;
+
+    // Final groupId to expose (for backwards compatibility)
+    const groupId = selectedGroupId;
+
+    const refetch = useCallback(() => {
+        setRefetchTrigger(prev => prev + 1);
+        refetchUser?.();
+    }, [refetchUser]);
 
     return (
         <DashboardContext.Provider
@@ -85,9 +141,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
                 groupId,
                 currentDate,
                 currentMonth,
-                loading: userLoading,
+                loading: userLoading || !initialized,
                 error: error || userError,
                 refetch,
+                // Multi-group support
+                availableGroups,
+                selectedGroupId,
+                selectGroup,
+                requiresSelection,
+                hasNoGroups,
             }}
         >
             {children}

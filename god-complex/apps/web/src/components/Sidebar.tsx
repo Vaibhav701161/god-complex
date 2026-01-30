@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { GCLogo } from "@/components/IsometricCube";
 import { useAuth } from "@/hooks/useAuth";
+import { useDashboardContext } from "@/hooks/useDashboardContext";
 
 // --- Icons (Custom, Unique, Sharp) ---
 
@@ -82,6 +83,10 @@ function SectionHeader({ label }: { label: string }) {
 
 export function Sidebar() {
     const { logout } = useAuth();
+    const { availableGroups, selectedGroupId } = useDashboardContext();
+    
+    const currentGroup = availableGroups.find(g => g.id === selectedGroupId);
+    const hasMultipleGroups = availableGroups.length > 1;
 
     return (
         <aside className="fixed left-0 top-0 bottom-0 w-64 bg-[#050810] border-r border-[#1E293B] z-50 flex flex-col hidden md:flex">
@@ -90,6 +95,29 @@ export function Sidebar() {
                 <div className="scale-50 opacity-80 -ml-4"><GCLogo /></div>
                 <span className="text-xs font-bold text-white tracking-[0.3em] -ml-2">GOD COMPLEX</span>
             </div>
+
+            {/* Group Context Indicator */}
+            {currentGroup && (
+                <div className="px-6 py-4 border-b border-[#1E293B] bg-[#0B101A]/50">
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-gray-600 uppercase tracking-widest mb-1">
+                                Active Group
+                            </span>
+                            <span className="text-xs font-mono text-white uppercase tracking-wider">
+                                {currentGroup.name}
+                            </span>
+                        </div>
+                        {hasMultipleGroups && (
+                            <div className="w-5 h-5 rounded-full bg-blue-900/30 border border-blue-500/50 flex items-center justify-center">
+                                <span className="text-[10px] text-blue-400 font-bold">
+                                    {availableGroups.length}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="flex-1 overflow-y-auto py-6">
 

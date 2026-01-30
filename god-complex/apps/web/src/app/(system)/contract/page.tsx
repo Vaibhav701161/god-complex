@@ -71,9 +71,13 @@ function mapSystemModeToPageState(mode: SystemMode): PageState {
 // --- Contract Page ---
 export default function DailyContract() {
     // Context and hooks
-    const { groupId, currentDate, loading: contextLoading, error: contextError, refetch } = useDashboardContext();
+    const { groupId, currentDate, loading: contextLoading, error: contextError, refetch, availableGroups, selectedGroupId, requiresSelection } = useDashboardContext();
     const { goals: existingGoals, loading: goalsLoading, error: goalsError, refetch: refetchGoals } = useTodayGoals();
     const { mode: systemMode, loading: modeLoading } = useSystemMode();
+    
+    // Get current group info for display
+    const currentGroup = availableGroups.find(g => g.id === selectedGroupId);
+    const hasMultipleGroups = availableGroups.length > 1;
 
     // Derive page state from system mode
     const [pageState, setPageState] = useState<PageState>("DECLARATION");
@@ -151,126 +155,146 @@ export default function DailyContract() {
         }
 
         if (localGoals.length === 0) {
-            setSubmitError("⚠️ VALIDATION FAILED: At least 1 goal required");
+            setSubmitError("At least one goal is required.");
             return;
         }
 
-        setIsSubmitting(true);
-        setSubmitError(null);
-
         try {
-            // Map frontend goals to backend DailyGoalInput format
-            const mappedGoals = localGoals.map((goal) => ({
-                title: goal.text,
-                category: goal.category,
-                finishCondition: goal.finishCondition,
-                minEffort: goal.finishCondition, // Use same value for both
-                isUncomfortable: goal.isUncomfortable,
-            }));
+            setIsSubmitting(true);
+            setSubmitError(null);
 
-            const response = await fetch("/api/daily-goals/submit", {
+            const response = await fetch("/api/goals", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 credentials: "include",
                 body: JSON.stringify({
                     groupId,
                     date: currentDate,
-                    goals: mappedGoals,
+                    goals: localGoals.map(g => ({
+                        title: g.text,
+                        category: g.category,
+                        finishCondition: g.finishCondition,
+                        isUncomfortable: g.isUncomfortable,
+                    })),
                 }),
             });
 
-            if (response.status === 201) {
-                // Success - refresh goals data, then transition state
-                // Don't clear localGoals until server goals are loaded
-                setPageState("EXECUTION");
-                await refetchGoals();
-                refetch();
-                // Now that server goals are loaded, clear local state
-                setLocalGoals([]);
-                return;
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || "Failed to lock contract");
             }
 
-            // Handle error responses
-            const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
-            const errorMessage = errorData.message || errorData.error || "Submission failed";
-
-            // Map specific error messages to user-friendly versions
-            if (response.status === 403 || errorMessage.toLowerCase().includes("cutoff")) {
-                setSubmitError("⚠️ CUTOFF PASSED: Cannot submit goals after the daily cutoff time");
-            } else if (errorMessage.toLowerCase().includes("already submitted") || errorMessage.toLowerCase().includes("duplicate")) {
-                setSubmitError("⚠️ DUPLICATE SUBMISSION: Contract already locked for today");
-            } else if (errorMessage.toLowerCase().includes("uncomfortable") || errorMessage.toLowerCase().includes("discomfort")) {
-                setSubmitError("⚠️ DISCOMFORT PROTOCOL: At least 1 uncomfortable goal required this week");
-            } else if (errorMessage.toLowerCase().includes("at least one goal")) {
-                setSubmitError("⚠️ VALIDATION FAILED: At least 1 goal required");
-            } else if (response.status === 500) {
-                setSubmitError("⚠️ SYSTEM ERROR: Server error. Please try again or contact support.");
-            } else {
-                setSubmitError(`⚠️ ERROR: ${errorMessage}`);
-            }
+            // Refetch goals to update UI
+            await refetchGoals();
+            setLocalGoals([]);
         } catch (err) {
-            console.error("Goal submission error:", err);
-            setSubmitError("⚠️ CONNECTION FAILED: Unable to reach server. Check your connection and retry.");
+            setSubmitError(err instanceof Error ? err.message : "Failed to lock contract");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // --- Loading States ---
+    // --- Render Logic ---
 
-    const isLoading = contextLoading || goalsLoading || modeLoading;
-
-    if (isLoading) {
+    if (contextLoading || goalsLoading || modeLoading) {
         return (
-            <main className="min-h-screen bg-[#0a0e14] pb-32">
-                <div className="max-w-4xl mx-auto px-6 md:px-12">
-                    <div className="flex flex-col items-center justify-center py-24">
-                        <div className="w-3 h-3 bg-blue-500 animate-pulse mb-4"></div>
-                        <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">
-                            Loading Contract Data...
-                        </p>
-                    </div>
+            <main className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+                <div className="text-gray-500 font-mono text-sm tracking-widest">
+                    LOADING CONTRACT...
                 </div>
             </main>
         );
     }
 
-    // --- No Active Group State ---
+    if (contextError || goalsError) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+                <div className="text-red-500 font-mono text-sm tracking-widest">
+                    ERROR: {contextError || goalsError}
+                </div>
+            </main>
+        );
+    }
+
+    // Show group selector if multi-group user hasn't selected one
+    if (requiresSelection) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+                <div className="max-w-lg text-center">
+                    <h1 className="text-2xl font-bold text-white tracking-[0.2em] uppercase mb-4">
+                        Select Active Group
+                    </h1>
+                    <p className="text-gray-500 font-mono text-sm mb-6">
+                        You have multiple groups. Please select one to access the Daily Contract.
+                    </p>
+                    <a
+                        href="/dashboard"
+                        className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold tracking-[0.2em] text-sm uppercase transition-colors"
+                    >
+                        Go to Dashboard
+                    </a>
+                </div>
+            </main>
+        );
+    }
 
     if (!groupId) {
         return (
-            <main className="min-h-screen bg-[#0a0e14] pb-32">
-                <div className="max-w-4xl mx-auto px-6 md:px-12">
-                    <Header pageState="DECLARATION" />
-                    <div className="p-8 border border-yellow-900/50 bg-yellow-950/10 text-center">
-                        <h2 className="text-xl font-bold text-yellow-500 tracking-[0.2em] uppercase mb-2">
-                            No Active Group
-                        </h2>
-                        <p className="text-sm font-mono text-yellow-600/80">
-                            {contextError || "You must join a group before creating daily contracts."}
-                        </p>
-                        <a
-                            href="/groups"
-                            className="inline-block mt-6 px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-black font-bold tracking-[0.2em] text-xs uppercase transition-colors"
-                        >
-                            Join a Group
-                        </a>
-                    </div>
+            <main className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+                <div className="max-w-lg text-center">
+                    <h1 className="text-2xl font-bold text-white tracking-[0.2em] uppercase mb-4">
+                        No Active Group
+                    </h1>
+                    <p className="text-gray-500 font-mono text-sm mb-6">
+                        You must join or create a group to access the Daily Contract.
+                    </p>
+                    <a
+                        href="/groups"
+                        className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold tracking-[0.2em] text-sm uppercase transition-colors"
+                    >
+                        View Groups
+                    </a>
                 </div>
             </main>
         );
     }
 
-    // --- Components ---
-
     return (
         <main className="min-h-screen bg-[#0a0e14] pb-32">
-            <div className="max-w-4xl mx-auto px-6 md:px-12">
-                <Header pageState={pageState} />
-                <SystemNotice pageState={pageState} />
+            {/* Header with Group Context */}
+            <div className="border-b border-[#1E293B] bg-[#050810] py-6 px-8">
+                <div className="max-w-7xl mx-auto flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <h1 className="text-2xl font-bold text-white tracking-[0.2em] uppercase">
+                            Daily Contract
+                        </h1>
+                        <div className="flex items-center gap-4 mt-2">
+                            {currentGroup && (
+                                <>
+                                    <span className="text-xs font-mono text-gray-500 uppercase">
+                                        Group: {currentGroup.name}
+                                    </span>
+                                    <span className="text-gray-700">•</span>
+                                    <span className="text-xs font-mono text-gray-500">
+                                        {currentGroup.timezone} • Cutoff: {currentGroup.cutoffHour}:00
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                    {hasMultipleGroups && (
+                        <a
+                            href="/groups"
+                            className="text-xs font-mono text-blue-400 hover:text-blue-300 underline transition-colors"
+                        >
+                            Switch Group →
+                        </a>
+                    )}
+                </div>
+            </div>
 
+            {/* Contract Content */}
+            <div className="max-w-7xl mx-auto px-6 md:px-12 py-12">
                 {/* Error Banner */}
                 {submitError && (
                     <div className="mb-8 p-4 border border-red-900/50 bg-red-950/20 flex justify-between items-start">
