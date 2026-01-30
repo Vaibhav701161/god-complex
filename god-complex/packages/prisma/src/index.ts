@@ -12,11 +12,15 @@ if (!connectionString) {
 
 const pool = new pg.Pool({
   connectionString,
-  max: 10, // Limit pool size for Neon/Dev
+  max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 20000,
 });
 
 const adapter = new PrismaPg(pool);
 
+// Create and export a properly configured Prisma client instance
 export const prisma = new PrismaClient({ adapter });
+
+// Also export the pool and adapter for advanced use cases
+export { pool, adapter };
