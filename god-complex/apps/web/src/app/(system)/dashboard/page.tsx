@@ -1,7 +1,7 @@
 "use client";
 
 import { TopBar, SystemDemandPanel, TodayGoalsPanel, HistoricalGrid, MonthlyGraph, Leaderboard } from "@/components/DashboardComponents";
-import { GroupSelector } from "@/components/GroupSelector";
+import GroupSelector from "@/components/GroupSelector";
 import { useUser } from "@/hooks/useUser";
 import { DashboardProvider, useDashboardContext } from "@/hooks/useDashboardContext";
 import { useTodayGoals } from "@/hooks/useTodayGoals";

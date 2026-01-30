@@ -1,10 +1,22 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useMemo } from "react";
+import { useDashboardContext } from "@/context/DashboardContext";
+import { useMonthlyHistory } from "@/hooks/useMonthlyHistory";
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { getWeekRange, getDayName, getWeekNumber, formatDateRange } from "@/lib/dateUtils";
 
 // --- Types ---
 type Verdict = "STABLE" | "UNSTABLE" | "FAILED";
 type DayStatus = "COMPLIANT" | "FAILED" | "AUTO_FAILED";
+
+interface DailyBreakdown {
+    day: string;
+    goals: number;
+    completed: number;
+    failed: number;
+    status: DayStatus;
+}
 
 // --- Components ---
 
@@ -18,20 +30,114 @@ const StatusBadge = ({ status }: { status: DayStatus }) => {
 };
 
 export default function WeeklyReview() {
-    // Mock Data
-    const verdict: Verdict = "UNSTABLE";
-    const weekRange = "JAN 15 – JAN 21";
-    const weekNumber = "WEEK 3";
+    const { selectedGroupId, currentMonth } = useDashboardContext();
+    const { history, loading: historyLoading, error: historyError } = useMonthlyHistory();
+    const { metrics, loading: metricsLoading } = useDashboardMetrics();
 
-    const dailyBreakdown = [
-        { day: "MON", goals: 3, completed: 3, failed: 0, status: "COMPLIANT" },
-        { day: "TUE", goals: 3, completed: 3, failed: 0, status: "COMPLIANT" },
-        { day: "WED", goals: 3, completed: 1, failed: 2, status: "FAILED" },
-        { day: "THU", goals: 3, completed: 3, failed: 0, status: "COMPLIANT" },
-        { day: "FRI", goals: 3, completed: 0, failed: 3, status: "AUTO_FAILED" },
-        { day: "SAT", goals: 3, completed: 3, failed: 0, status: "COMPLIANT" },
-        { day: "SUN", goals: 3, completed: 2, failed: 1, status: "FAILED" },
-    ] as const;
+    // Calculate current week range
+    const { weekRange, weekNumber, dailyBreakdown, verdict, totalFailures } = useMemo(() => {
+        const today = new Date();
+        const { start, end } = getWeekRange(today);
+        
+        // Format week range
+        const startDay = start.getDate();
+        const endDay = end.getDate();
+        const weekRange = formatDateRange(startDay, endDay, currentMonth);
+        const weekNumber = `WEEK ${getWeekNumber(start)}`;
+
+        // Build daily breakdown for current week
+        const dailyBreakdown: DailyBreakdown[] = [];
+        let totalFailures = 0;
+        let totalAutoFails = 0;
+
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(start);
+            date.setDate(start.getDate() + i);
+            const dayOfMonth = date.getDate();
+            const dayData = history.get(dayOfMonth);
+
+            const dayName = getDayName(date.getDay());
+            
+            if (!dayData) {
+                // Day not yet reached or no data
+                dailyBreakdown.push({
+                    day: dayName,
+                    goals: 0,
+                    completed: 0,
+                    failed: 0,
+                    status: "COMPLIANT"
+                });
+                continue;
+            }
+
+            const totalGoals = dayData.goals.length;
+            const completedGoals = dayData.goals.filter(g => g.status === 'completed').length;
+            const autoFailedGoals = dayData.goals.filter(g => g.status === 'auto-fail').length;
+            const failedGoals = dayData.goals.filter(g => g.status === 'failed' || g.status === 'auto-fail').length;
+            const isAutoFailed = autoFailedGoals > 0;
+
+            let status: DayStatus = "COMPLIANT";
+            if (isAutoFailed) {
+                status = "AUTO_FAILED";
+                totalAutoFails++;
+                totalFailures++;
+            } else if (failedGoals > 0) {
+                status = "FAILED";
+                totalFailures++;
+            }
+
+            dailyBreakdown.push({
+                day: dayName,
+                goals: totalGoals,
+                completed: completedGoals,
+                failed: failedGoals,
+                status
+            });
+        }
+
+        // Determine verdict based on total failures
+        let verdict: Verdict = "STABLE";
+        if (totalFailures >= 5) {
+            verdict = "FAILED";
+        } else if (totalFailures >= 2) {
+            verdict = "UNSTABLE";
+        }
+
+        return { weekRange, weekNumber, dailyBreakdown, verdict, totalFailures };
+    }, [history, currentMonth]);
+
+    const loading = historyLoading || metricsLoading;
+
+    if (loading) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
+                <div className="max-w-3xl mx-auto text-center pt-24">
+                    <p className="text-gray-500 font-mono text-sm">Loading weekly review...</p>
+                </div>
+            </main>
+        );
+    }
+
+    if (historyError) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
+                <div className="max-w-3xl mx-auto text-center pt-24">
+                    <p className="text-red-500 font-mono text-sm">Failed to load weekly data</p>
+                </div>
+            </main>
+        );
+    }
+
+    if (dailyBreakdown.every(d => d.goals === 0)) {
+        return (
+            <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
+                <div className="max-w-3xl mx-auto text-center pt-24">
+                    <p className="text-gray-500 font-mono text-sm">No data available for current week</p>
+                    <p className="text-gray-600 font-mono text-xs mt-2">Complete at least one day to see weekly review</p>
+                </div>
+            </main>
+        );
+    }
 
     // Use cold, judicial colors. Amber is removed.
     const verdictColor = {
@@ -96,18 +202,20 @@ export default function WeeklyReview() {
                             </h3>
 
                             <div className="space-y-1">
-                                <div className="text-2xl font-mono text-red-500/80">6</div>
+                                <div className="text-2xl font-mono text-red-500/80">{totalFailures}</div>
                                 <div className="text-[10px] text-gray-600 uppercase tracking-wider">Total Failures</div>
                             </div>
 
-                            <div className="space-y-1 pt-2">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-wider">Primary Excuse</div>
-                                <div className="text-xs font-mono text-gray-400">"Too Tired / Late"</div>
-                            </div>
+                            {metrics.pattern && (
+                                <div className="space-y-1 pt-2">
+                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">Pattern Detected</div>
+                                    <div className="text-xs font-mono text-gray-400">{metrics.pattern}</div>
+                                </div>
+                            )}
 
                             <div className="pt-4 mt-4 border-t border-gray-900">
                                 <div className="text-[10px] text-red-700/70 font-mono uppercase tracking-widest">
-                                    Momentum: +1 (Negative)
+                                    Momentum: {metrics.failureMomentum > 0 ? '+' : ''}{metrics.failureMomentum}
                                 </div>
                             </div>
                         </div>
