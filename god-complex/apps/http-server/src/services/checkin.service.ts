@@ -37,11 +37,11 @@ export async function submitCheckin(userId: string, data: CheckinInput) {
         throw new Error("Cannot check in for future days.");
     }
     if (date < opDay.date) {
-        const finalization = await prisma.dayFinalization.findUnique({
+        const finalization = await prisma.dailyFinalization.findUnique({
             where: {
                 groupId_date: {
                     groupId: groupId,
-                    date: new Date(date)
+                    date: date
                 }
             },
             select: { status: true }

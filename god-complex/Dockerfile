@@ -19,7 +19,10 @@ RUN pnpm install --frozen-lockfile
 # Generate Prisma client
 RUN cd packages/prisma && pnpm exec prisma generate
 
-# Build backend
+# Build Prisma package (REQUIRED for TypeScript compilation)
+RUN cd packages/prisma && pnpm run build
+
+# Build backend (now Prisma types are available)
 RUN cd apps/http-server && pnpm run build
 
 # Set working directory to backend
