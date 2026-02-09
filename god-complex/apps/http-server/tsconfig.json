@@ -8,15 +8,15 @@
     "outDir": "./build",
     "rootDir": "./src",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@god-complex/prisma": [
-        "../../packages/prisma/dist"
-      ]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
     "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../../packages/prisma"
+    }
   ]
 }
