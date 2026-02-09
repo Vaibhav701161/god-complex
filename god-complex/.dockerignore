@@ -6,6 +6,7 @@ node_modules
 .next
 **/dist
 **/.turbo
+**/build
 
 # Environment files (sensitive)
 .env
@@ -39,6 +40,7 @@ coverage
 # Git
 .git
 .gitignore
+.github
 
 # Documentation
 *.md
@@ -46,5 +48,10 @@ docs/
 
 # Docker
 docker-compose*.yml
-Dockerfile*
-.dockerignore
+
+# Exclude frontend and unused packages (backend-only image)
+apps/web
+packages/ui
+packages/typescript-config
+packages/eslint-config
+scripts
