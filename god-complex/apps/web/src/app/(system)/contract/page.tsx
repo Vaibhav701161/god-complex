@@ -275,7 +275,7 @@ export default function DailyContract() {
                 
 
                 
-                {existingGoals.length > 0 && (<ResolutionState goals={existingGoals} groupId={groupId!} currentDate={currentDate} refetch={refetch} refetchGoals={refetchGoals} setPageState={setPageState}/>)}
+                {existingGoals.length > 0 && (<ResolutionState goals={existingGoals} groupId={groupId!} currentDate={currentDate} refetch={refetch} refetchGoals={refetchGoals} refetchSystemMode={refetchSystemMode} setPageState={setPageState}/>)}
 
                 
                 {pageState === "FAILED" && <FailedState />}
@@ -487,12 +487,13 @@ function DeclarationState({ localGoals, newGoal, setNewGoal, addGoal, removeGoal
             </div>
         </div>);
 }
-function ResolutionState({ goals, groupId, currentDate, refetch, refetchGoals, setPageState }: {
+function ResolutionState({ goals, groupId, currentDate, refetch, refetchGoals, refetchSystemMode, setPageState }: {
     goals: Goal[];
     groupId: string;
     currentDate: string;
     refetch: () => void;
     refetchGoals: () => Promise<void>;
+    refetchSystemMode: () => Promise<void>;
     setPageState: (state: PageState) => void;
 }) {
     const [goalOutcomes, setGoalOutcomes] = useState<Map<string, GoalOutcome>>(new Map());
