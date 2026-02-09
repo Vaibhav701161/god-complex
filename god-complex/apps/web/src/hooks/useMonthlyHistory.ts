@@ -1,43 +1,35 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useDashboardContext } from "./useDashboardContext";
 import { DayHistoryEntry, DailyStatus } from "@/types/dashboard";
-
 export function useMonthlyHistory() {
     const { groupId, currentMonth, loading: contextLoading } = useDashboardContext();
     const [history, setHistory] = useState<Map<number, DayHistoryEntry>>(new Map());
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
     useEffect(() => {
         async function fetchMonthlyHistory() {
             if (!groupId) {
                 setHistory(new Map());
                 setLoading(false);
+                setError(null);
                 return;
             }
-
             try {
-                // Clear previous group's history immediately when groupId changes
                 setHistory(new Map());
                 setLoading(true);
-
-                // 🎯 SINGLE BATCH QUERY - Replaces 31 individual calls
-                const response = await fetch(
-                    `/api/history/${groupId}/${currentMonth}`,
-                    { credentials: "include" }
-                );
-
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const response = await fetch(`/api/history/${groupId}/${currentMonth}`, {
+                    credentials: "include",
+                    signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
                 if (!response.ok) {
                     throw new Error("Failed to fetch monthly history");
                 }
-
                 const data = await response.json();
-
-                // Transform batch response into Map structure
                 const historyMap = new Map<number, DayHistoryEntry>();
-
                 data.days.forEach((dayData: any) => {
                     historyMap.set(dayData.day, {
                         date: dayData.date,
@@ -48,31 +40,33 @@ export function useMonthlyHistory() {
                         })),
                     });
                 });
-
                 setHistory(historyMap);
                 setError(null);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to load history");
+            }
+            catch (err) {
+                if ((err as Error)?.name === 'AbortError') {
+                    setError("Request timed out. Please check your connection and try again.");
+                }
+                else {
+                    setError(err instanceof Error ? err.message : "Failed to load history");
+                }
                 setHistory(new Map());
-            } finally {
+            }
+            finally {
                 setLoading(false);
             }
         }
-
         if (!contextLoading) {
             fetchMonthlyHistory();
         }
     }, [groupId, currentMonth, contextLoading]);
-
     return { history, loading: loading || contextLoading, error };
 }
-
 function mapBackendStatusToDailyStatus(goal: any): DailyStatus {
-    if (!goal.status) return 'none';
-
-    // Check for auto-fail
-    if (goal.isAutoFail) return 'auto-fail';
-
+    if (!goal.status)
+        return 'none';
+    if (goal.isAutoFail)
+        return 'auto-fail';
     switch (goal.status) {
         case 'COMPLETED':
             return 'completed';

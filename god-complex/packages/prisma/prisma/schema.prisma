@@ -7,7 +7,6 @@
 generator client {
   provider = "prisma-client-js"  
   output   = "../generated/prisma"
-  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -80,6 +79,8 @@ model Session {
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([expiresAt])
   @@map("session")
 }
 
@@ -100,6 +101,8 @@ model Account {
 
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([providerId, accountId])
   @@map("account")
 }
 
@@ -111,6 +114,9 @@ model Verification {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   
+  @@index([identifier])
+  @@index([value])
+  @@index([expiresAt])
   @@map("verification")
 }
 

@@ -1,25 +1,12 @@
 import { prisma } from "@god-complex/prisma";
-
-/**
- * GET MONTHLY HISTORY (BATCH)
- * 
- * Returns complete month history in a single query.
- * Replaces 31 individual API calls with 1 optimized batch query.
- */
 export async function getMonthlyHistory(groupId: string, month: string) {
-    // Validate month format (YYYY-MM)
     if (!/^\d{4}-\d{2}$/.test(month)) {
         throw new Error("Invalid month format. Expected YYYY-MM");
     }
-
-    // Calculate month boundaries
     const [year, monthNum] = month.split('-').map(Number);
-    const startDate = new Date(year, monthNum - 1, 1); // First day of month
-    const endDate = new Date(year, monthNum, 0); // Last day of month
-
+    const startDate = new Date(year, monthNum - 1, 1);
+    const endDate = new Date(year, monthNum, 0);
     const daysInMonth = endDate.getDate();
-
-    // Single optimized query with joins
     const goals = await prisma.goal.findMany({
         where: {
             groupId,
@@ -42,8 +29,6 @@ export async function getMonthlyHistory(groupId: string, month: string) {
             { createdAt: 'asc' },
         ],
     });
-
-    // Check which days are finalized
     const finalizations = await prisma.dailyFinalization.findMany({
         where: {
             groupId,
@@ -56,14 +41,9 @@ export async function getMonthlyHistory(groupId: string, month: string) {
             status: true,
         },
     });
-
-    const finalizedDates = new Set(
-        finalizations
-            .filter(f => f.status === 'FINALIZED')
-            .map(f => f.date)
-    );
-
-    // Group goals by day
+    const finalizedDates = new Set(finalizations
+        .filter(f => f.status === 'FINALIZED')
+        .map(f => f.date));
     const dayMap = new Map<number, typeof goals>();
     goals.forEach(goal => {
         const day = goal.date.getDate();
@@ -72,13 +52,10 @@ export async function getMonthlyHistory(groupId: string, month: string) {
         }
         dayMap.get(day)!.push(goal);
     });
-
-    // Build response structure
     const days = Array.from({ length: daysInMonth }, (_, i) => {
         const day = i + 1;
         const dateStr = `${month}-${day.toString().padStart(2, '0')}`;
         const dayGoals = dayMap.get(day) || [];
-
         return {
             date: dateStr,
             day,
@@ -97,7 +74,6 @@ export async function getMonthlyHistory(groupId: string, month: string) {
             })),
         };
     });
-
     return {
         month,
         totalDays: daysInMonth,

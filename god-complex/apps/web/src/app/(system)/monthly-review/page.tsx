@@ -1,89 +1,66 @@
 "use client";
-
 import { useMemo } from "react";
 import { useDashboardContext } from "@/hooks/useDashboardContext";
 import { useMonthlyHistory } from "@/hooks/useMonthlyHistory";
 import { useMonthlyOutcome } from "@/hooks/useMonthlyOutcome";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { calculateFailureThresholdDay, getDaysInMonth, formatMonth } from "@/lib/dateUtils";
-
-// --- Types ---
+import { formatCurrency } from "@/lib/currency";
 type MonthVerdict = "CONSISTENT" | "FAILED";
-
 export default function MonthlyReview() {
     const { selectedGroupId, currentMonth } = useDashboardContext();
     const { history, loading: historyLoading, error: historyError } = useMonthlyHistory();
     const { outcome, loading: outcomeLoading, isClosed } = useMonthlyOutcome();
     const { metrics, loading: metricsLoading } = useDashboardMetrics();
-
-    // Calculate month stats
     const { verdict, totalDays, daysCompliant, daysFailed, autoFails, efficiency, failureDay } = useMemo(() => {
         const totalDays = getDaysInMonth(currentMonth);
-        
         let daysCompliant = 0;
         let daysFailed = 0;
         let autoFails = 0;
-
         history.forEach((day) => {
             const hasAutoFail = day.goals.some(g => g.status === 'auto-fail');
             const hasFailure = day.goals.some(g => g.status === 'failed' || g.status === 'auto-fail');
-            
             if (hasAutoFail) {
                 autoFails++;
             }
-            
             if (hasFailure) {
                 daysFailed++;
-            } else {
+            }
+            else {
                 daysCompliant++;
             }
         });
-
         const efficiency = history.size > 0 ? Math.round((daysCompliant / history.size) * 100) : 0;
-
-        // Calculate failure threshold day if month is closed
         let failureDay: number | null = null;
         if (isClosed && outcome?.userOutcome) {
-            const requiredScore = 80; // From contract
-            const maxDailyScore = 10; // From contract
+            const requiredScore = 80;
+            const maxDailyScore = 10;
             failureDay = calculateFailureThresholdDay(history, totalDays, requiredScore, maxDailyScore);
         }
-
-        // Determine verdict
-        const verdict: MonthVerdict = isClosed && outcome?.userOutcome?.finalScore 
+        const verdict: MonthVerdict = isClosed && outcome?.userOutcome?.finalScore
             ? (outcome.userOutcome.finalScore >= 80 ? "CONSISTENT" : "FAILED")
             : "FAILED";
-
         return { verdict, totalDays, daysCompliant, daysFailed, autoFails, efficiency, failureDay };
     }, [history, currentMonth, isClosed, outcome]);
-
     const loading = historyLoading || outcomeLoading || metricsLoading;
     const month = formatMonth(currentMonth);
     const cycleStatus = isClosed ? "CLOSED" : "IN PROGRESS";
-
     if (loading) {
-        return (
-            <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
+        return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
                 <div className="max-w-3xl mx-auto text-center pt-24">
                     <p className="text-gray-500 font-mono text-sm">Loading monthly review...</p>
                 </div>
-            </main>
-        );
+            </main>);
     }
-
     if (historyError) {
-        return (
-            <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
+        return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
                 <div className="max-w-3xl mx-auto text-center pt-24">
                     <p className="text-red-500 font-mono text-sm">Failed to load monthly data</p>
                 </div>
-            </main>
-        );
+            </main>);
     }
-
     if (!isClosed) {
-        return (
-            <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
+        return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans">
                 <div className="max-w-3xl mx-auto text-center pt-24">
                     <div className="border border-gray-700 p-8 inline-block">
                         <p className="text-gray-400 font-mono text-sm uppercase tracking-widest mb-2">Month In Progress</p>
@@ -104,25 +81,19 @@ export default function MonthlyReview() {
                         </div>
                     </div>
                 </div>
-            </main>
-        );
+            </main>);
     }
-
     const verdictColors = {
         CONSISTENT: "text-blue-300 border-blue-900/30 bg-blue-950/5",
         FAILED: "text-red-500 border-red-900/30 bg-red-950/5",
     };
-
     const remainingDays = failureDay ? totalDays - failureDay : 0;
-    const failureMessage = failureDay 
+    const failureMessage = failureDay
         ? `Failure became irreversible on Day ${failureDay}.`
         : "Month still in progress";
+    return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans selection:bg-red-900/20">
 
-
-    return (
-        <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans selection:bg-red-900/20">
-
-            {/* Header */}
+            
             <div className="flex justify-between items-end mb-24 border-b border-[#1E293B] pb-6 opacity-60 hover:opacity-100 transition-opacity">
                 <div>
                     <h1 className="text-xl md:text-2xl font-bold text-gray-300 tracking-[0.2em] uppercase mb-1">Monthly Review</h1>
@@ -135,24 +106,23 @@ export default function MonthlyReview() {
 
             <div className="max-w-3xl mx-auto space-y-24">
 
-                {/* 1. MONTH VERDICT (Dominant) */}
+                
                 <section className="flex flex-col items-center">
                     <div className={`px-16 py-10 border flex flex-col items-center justify-center text-center ${verdictColors[verdict]} backdrop-blur-sm`}>
                         <h2 className="text-5xl md:text-7xl font-black tracking-tighter uppercase opacity-90 mb-4">{verdict}</h2>
                         <div className="w-full h-px bg-current opacity-20 mb-4"></div>
                         <p className="font-mono text-[10px] uppercase tracking-widest opacity-60">
-                            {verdict === "FAILED" && failureDay 
-                                ? `Month Failed — Failure Threshold Breached on Day ${failureDay}`
-                                : verdict === "CONSISTENT"
-                                ? "Month Passed — Contract Fulfilled"
-                                : "Final Verdict Pending"}
+                            {verdict === "FAILED" && failureDay
+            ? `Month Failed — Failure Threshold Breached on Day ${failureDay}`
+            : verdict === "CONSISTENT"
+                ? "Month Passed — Contract Fulfilled"
+                : "Final Verdict Pending"}
                         </p>
                     </div>
                 </section>
 
-                {/* 2. FAILURE THRESHOLD REPORT */}
-                {failureDay && (
-                    <section className="md:w-3/4 mx-auto">
+                
+                {failureDay && (<section className="md:w-3/4 mx-auto">
                         <div className="border border-red-900/20 bg-red-950/5 p-6 text-center space-y-2">
                             <div className="text-[10px] font-bold text-red-600 tracking-[0.2em] uppercase mb-2">
                                 Irreversible Point
@@ -164,10 +134,9 @@ export default function MonthlyReview() {
                                 {remainingDays} days remaining were insufficient for recovery.
                             </p>
                         </div>
-                    </section>
-                )}
+                    </section>)}
 
-                {/* 3. MONTH SUMMARY (Evidence) */}
+                
                 <section>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[#1E293B] border border-[#1E293B]">
                         <div className="bg-[#0B101A] p-6 text-center">
@@ -195,9 +164,8 @@ export default function MonthlyReview() {
                     </div>
                 </section>
 
-                {/* 3.5 MONTHLY OUTCOME DATA */}
-                {isClosed && outcome?.userOutcome && (
-                    <section>
+                
+                {isClosed && outcome?.userOutcome && (<section>
                         <h3 className="text-[10px] font-bold text-gray-600 tracking-[0.2em] uppercase mb-4 text-center">
                             Monthly Results
                         </h3>
@@ -219,18 +187,17 @@ export default function MonthlyReview() {
                                 <div className="text-[9px] text-gray-600 uppercase tracking-widest">Active Days</div>
                             </div>
                             <div className="bg-[#0B101A] p-6 text-center">
-                                <div className="text-2xl font-mono text-green-500 mb-1">${outcome.userOutcome.payoutAmount}</div>
+                                <div className="text-2xl font-mono text-green-500 mb-1">{formatCurrency(outcome.userOutcome.payoutAmount)}</div>
                                 <div className="text-[9px] text-gray-600 uppercase tracking-widest">Payout</div>
                             </div>
                             <div className="bg-[#0B101A] p-6 text-center">
-                                <div className="text-2xl font-mono text-red-500 mb-1">${outcome.userOutcome.penaltyAmount}</div>
+                                <div className="text-2xl font-mono text-red-500 mb-1">{formatCurrency(outcome.userOutcome.penaltyAmount)}</div>
                                 <div className="text-[9px] text-gray-600 uppercase tracking-widest">Penalty</div>
                             </div>
                         </div>
-                    </section>
-                )}
+                    </section>)}
 
-                {/* 4. SYSTEM JUDGMENT */}
+                
                 <section className="py-12 border-y border-gray-800 text-center">
                     <h3 className="text-[10px] font-bold text-gray-600 tracking-[0.3em] uppercase mb-6">
                         System Conclusion
@@ -240,7 +207,7 @@ export default function MonthlyReview() {
                     </div>
                     <div className="w-12 h-0.5 bg-red-900/50 mx-auto"></div>
                     
-                    {/* Metrics Display */}
+                    
                     <div className="mt-8 grid grid-cols-2 gap-6 max-w-md mx-auto">
                         <div className="text-center">
                             <div className="text-xl font-mono text-gray-400 mb-1">{metrics.failureMomentum > 0 ? '+' : ''}{metrics.failureMomentum}</div>
@@ -253,7 +220,7 @@ export default function MonthlyReview() {
                     </div>
                 </section>
 
-                {/* 5. ARCHIVAL NOTICE */}
+                
                 <section className="text-center opacity-40">
                     <div className="inline-block border border-gray-700 p-4">
                         <p className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
@@ -266,6 +233,5 @@ export default function MonthlyReview() {
                 </section>
 
             </div>
-        </main>
-    );
+        </main>);
 }

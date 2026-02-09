@@ -33,6 +33,16 @@ run_test() {
 
 # Prerequisites check
 echo -e "\n${YELLOW}Checking prerequisites...${NC}"
+
+# Check database
+if ! docker ps | grep -q "godcomplex-postgres"; then
+    echo -e "${RED}✗ PostgreSQL container not running${NC}"
+    echo "Start database with: pnpm db:start"
+    exit 1
+fi
+echo -e "${GREEN}✓ PostgreSQL container is running${NC}"
+
+# Check backend server
 if ! curl -s http://localhost:4000/api/health > /dev/null; then
     echo -e "${RED}✗ Backend server not running on port 4000${NC}"
     echo "Start server with: cd apps/http-server && pnpm dev"
@@ -41,6 +51,22 @@ fi
 echo -e "${GREEN}✓ Backend server is running${NC}"
 
 # Run test suite
+echo -e "\n${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}                    INFRASTRUCTURE TESTS                     ${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+
+run_test "0. Database Connection" "./test-db-connection.sh"
+
+echo -e "\n${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}                    AUTHENTICATION TESTS                     ${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+
+run_test "0.5. Auth Flow" "./test-auth-flow.sh"
+
+echo -e "\n${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}                    BUSINESS LOGIC TESTS                     ${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+
 run_test "1. New User Flow" "./test-new-user-flow.sh"
 run_test "2. Multi-Group Context Resolution" "./test-multi-group-flow.sh"
 run_test "3. Failure & Penalty Flow" "./test-failure-flow.sh"

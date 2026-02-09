@@ -1,11 +1,7 @@
 "use client";
-
 import { motion } from "framer-motion";
-
-// --- Types ---
 type EnforcementStatus = "ACTIVE" | "NO_STAKE" | "SUSPENDED";
 type TransactionResult = "DEBITED" | "HELD" | "FORFEITED";
-
 interface Transaction {
     id: string;
     timestamp: string;
@@ -13,32 +9,26 @@ interface Transaction {
     amount: number;
     result: TransactionResult;
 }
-
 export default function PaymentsPage() {
-    // Mock Data
     const status: EnforcementStatus = "ACTIVE";
     const stakeAmount = 5000;
     const currency = "₹";
     const cycle = "January 2026";
     const scope = "Group Contract (Alpha Squad)";
-
     const transactions: Transaction[] = [
         { id: "tx_103", timestamp: "Jan 18 09:00", event: "AUTO_FAIL_TRIGGERED (Day 18)", amount: 500, result: "DEBITED" },
         { id: "tx_102", timestamp: "Jan 15 23:59", event: "MISSED_DECLARATION", amount: 200, result: "DEBITED" },
         { id: "tx_101", timestamp: "Jan 10 09:00", event: "GOAL_FAILED", amount: 100, result: "DEBITED" },
         { id: "tx_100", timestamp: "Jan 01 00:00", event: "CYCLE_STAKE_LOCKED", amount: 5000, result: "HELD" },
     ];
-
     const resultColors = {
         DEBITED: "text-red-500",
         HELD: "text-blue-400",
         FORFEITED: "text-red-600 font-bold",
     };
+    return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans selection:bg-red-900/20">
 
-    return (
-        <main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12 font-sans selection:bg-red-900/20">
-
-            {/* Header */}
+            
             <div className="flex justify-between items-end mb-16 border-b border-[#1E293B] pb-6">
                 <div>
                     <h1 className="text-xl md:text-2xl font-bold text-gray-300 tracking-[0.2em] uppercase mb-1">Payments</h1>
@@ -55,13 +45,13 @@ export default function PaymentsPage() {
 
             <div className="max-w-4xl mx-auto space-y-16">
 
-                {/* 5. ACTIVE STAKE (Critical) */}
+                
                 <section>
                     <div className="bg-[#0B101A] border border-[#1E293B] p-8 md:p-12 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-50">
                             <svg className="w-16 h-16 text-[#1E293B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                                <rect x="2" y="5" width="20" height="14" rx="2" />
-                                <line x1="2" y1="10" x2="22" y2="10" />
+                                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                                <line x1="2" y1="10" x2="22" y2="10"/>
                             </svg>
                         </div>
 
@@ -74,7 +64,7 @@ export default function PaymentsPage() {
 
                         <div className="text-xs text-gray-500 font-mono flex items-center gap-2">
                             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             </svg>
                             Bound to: {scope}
                         </div>
@@ -83,7 +73,7 @@ export default function PaymentsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
 
-                    {/* 6. PENALTY RULES */}
+                    
                     <section>
                         <h3 className="text-[10px] font-bold text-gray-600 tracking-[0.2em] uppercase mb-6 flex items-center gap-3">
                             Penalty Schedule
@@ -111,7 +101,7 @@ export default function PaymentsPage() {
                         </div>
                     </section>
 
-                    {/* 8. PAYMENT METHOD */}
+                    
                     <section>
                         <h3 className="text-[10px] font-bold text-gray-600 tracking-[0.2em] uppercase mb-6 flex items-center gap-3">
                             Source Method
@@ -135,7 +125,7 @@ export default function PaymentsPage() {
 
                 </div>
 
-                {/* 7. TRANSACTION LOG */}
+                
                 <section>
                     <h3 className="text-[10px] font-bold text-gray-600 tracking-[0.2em] uppercase mb-6 flex items-center gap-3">
                         Transaction Record
@@ -150,20 +140,17 @@ export default function PaymentsPage() {
                             <div className="col-span-2 text-right">Result</div>
                         </div>
 
-                        {transactions.map((tx) => (
-                            <div key={tx.id} className="grid grid-cols-12 py-4 px-4 border-b border-[#1E293B]/30 items-center hover:bg-[#0f1623] transition-colors">
+                        {transactions.map((tx) => (<div key={tx.id} className="grid grid-cols-12 py-4 px-4 border-b border-[#1E293B]/30 items-center hover:bg-[#0f1623] transition-colors">
                                 <div className="col-span-3 text-xs font-mono text-gray-500">{tx.timestamp}</div>
                                 <div className="col-span-5 text-xs text-gray-300">{tx.event}</div>
                                 <div className="col-span-2 text-xs font-mono text-gray-400 text-right">{currency}{tx.amount}</div>
                                 <div className={`col-span-2 text-[10px] font-bold text-right tracking-wider ${resultColors[tx.result]}`}>
                                     {tx.result}
                                 </div>
-                            </div>
-                        ))}
+                            </div>))}
                     </div>
                 </section>
 
             </div>
-        </main>
-    );
+        </main>);
 }

@@ -12,12 +12,29 @@ TEST_EMAIL="test-user-$(date +%s)@test.com"
 TEST_PASSWORD="SecurePass123!"
 
 SIGNUP_RESPONSE=$(signup_user "$TEST_EMAIL" "$TEST_PASSWORD" "Test User")
-echo $SIGNUP_RESPONSE
+echo "Signup response: $SIGNUP_RESPONSE"
+
+# Check for error in response
+if echo "$SIGNUP_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ Signup failed: $SIGNUP_RESPONSE"
+    exit 1
+fi
+
+# Check if response contains user object
+if ! echo "$SIGNUP_RESPONSE" | jq -e '.user' > /dev/null 2>&1; then
+    echo "❌ Invalid signup response (no user object): $SIGNUP_RESPONSE"
+    exit 1
+fi
 
 # Extract user ID from response
 USER_ID=$(echo $SIGNUP_RESPONSE | jq -r '.user.id')
 
-echo "User ID: $USER_ID"
+if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
+    echo "❌ Failed to extract user ID from response"
+    exit 1
+fi
+
+echo "✅ User ID: $USER_ID"
 echo "Email: $TEST_EMAIL"
 
 # Step 2: Verify email (simulate)
@@ -39,10 +56,20 @@ GROUP_RESPONSE=$(auth_request POST "/groups" '{
     "cutoffHour": 22,
     "timezone": "America/New_York"
 }')
-echo $GROUP_RESPONSE
+echo "Group response: $GROUP_RESPONSE"
+
+# Check for error in response
+if echo "$GROUP_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ Group creation failed: $GROUP_RESPONSE"
+    exit 1
+fi
 
 GROUP_ID=$(echo $GROUP_RESPONSE | jq -r '.id')
-echo "Group ID: $GROUP_ID"
+if [ -z "$GROUP_ID" ] || [ "$GROUP_ID" = "null" ]; then
+    echo "❌ Failed to extract group ID from response"
+    exit 1
+fi
+echo "✅ Group ID: $GROUP_ID"
 
 # Step 5: Submit daily goals
 echo -e "\n5. Submitting daily goals..."
@@ -67,13 +94,32 @@ GOALS_RESPONSE=$(auth_request POST "/daily-goals/submit" '{
         }
     ]
 }')
-echo $GOALS_RESPONSE
+echo "Goals response: $GOALS_RESPONSE"
+
+if echo "$GOALS_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ Goals submission failed: $GOALS_RESPONSE"
+    exit 1
+fi
+echo "✅ Daily goals submitted"
 
 # Step 6: Check-in with results
 echo -e "\n6. Submitting check-in..."
 GOALS_DATA=$(auth_request GET "/daily-goals/$GROUP_ID/$TODAY")
+echo "Goals data response: $GOALS_DATA"
+
+if echo "$GOALS_DATA" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ Failed to fetch goals: $GOALS_DATA"
+    exit 1
+fi
+
 GOAL_ID_1=$(echo $GOALS_DATA | jq -r '.goals[0].id')
 GOAL_ID_2=$(echo $GOALS_DATA | jq -r '.goals[1].id')
+
+if [ -z "$GOAL_ID_1" ] || [ "$GOAL_ID_1" = "null" ]; then
+    echo "❌ Failed to extract goal IDs from response"
+    exit 1
+fi
+echo "✅ Goals fetched successfully"
 
 CHECKIN_RESPONSE=$(auth_request POST "/daily-checkin" '{
     "groupId": "'$GROUP_ID'",
@@ -89,11 +135,24 @@ CHECKIN_RESPONSE=$(auth_request POST "/daily-checkin" '{
         }
     ]
 }')
-echo $CHECKIN_RESPONSE
+echo "Check-in response: $CHECKIN_RESPONSE"
+
+if echo "$CHECKIN_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ Check-in failed: $CHECKIN_RESPONSE"
+    exit 1
+fi
+echo "✅ Check-in submitted successfully"
 
 # Step 7: View dashboard
 echo -e "\n7. Fetching dashboard metrics..."
-auth_request GET "/metrics/$GROUP_ID/$USER_ID"
+METRICS_RESPONSE=$(auth_request GET "/metrics/$GROUP_ID/$USER_ID")
+echo "Metrics response: $METRICS_RESPONSE"
+
+if echo "$METRICS_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ Failed to fetch dashboard metrics: $METRICS_RESPONSE"
+    exit 1
+fi
+echo "✅ Dashboard metrics fetched successfully"
 
 # Save variables for subsequent tests
 echo "export USER_ID='$USER_ID'" > "$VARS_FILE"

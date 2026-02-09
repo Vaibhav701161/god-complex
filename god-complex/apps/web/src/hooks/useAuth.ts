@@ -1,15 +1,12 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-
 interface AuthState {
     user: any | null;
     loading: boolean;
     error: string | null;
 }
-
 export function useAuth() {
     const [state, setState] = useState<AuthState>({
         user: null,
@@ -17,48 +14,109 @@ export function useAuth() {
         error: null,
     });
     const router = useRouter();
-
+    const checkingRef = useRef(false);
     useEffect(() => {
         let mounted = true;
-
         async function checkSession() {
-            try {
-                const session = await authClient.getSession();
-
-                if (!mounted) return;
-
-                if (session?.data?.user) {
-                    setState({
-                        user: session.data.user,
-                        loading: false,
-                        error: null,
+            if (checkingRef.current) {
+                console.log("[useAuth] Already checking session, skipping");
+                return;
+            }
+            checkingRef.current = true;
+            console.log("[useAuth] Starting session check...");
+            const maxRetries = 2;
+            const retryDelays = [500, 1000];
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    console.log(`[useAuth] Attempt ${attempt}/${maxRetries}: Checking session via /api/auth/session`);
+                    const resp = await fetch("/api/auth/session", {
+                        credentials: "include",
+                        signal: controller.signal,
                     });
-                } else {
+                    clearTimeout(timeoutId);
+                    let session: any = null;
+                    if (resp.ok) {
+                        session = await resp.json();
+                    }
+                    else {
+                        console.warn("[useAuth] Session endpoint returned non-200", resp.status);
+                        if (resp.status === 401 || resp.status === 403) {
+                            console.warn("[useAuth] Auth failure, not retrying");
+                            if (mounted) {
+                                setState({
+                                    user: null,
+                                    loading: false,
+                                    error: null,
+                                });
+                            }
+                            checkingRef.current = false;
+                            return;
+                        }
+                    }
+                    console.log("[useAuth] session response", resp.status, session);
+                    if (!mounted)
+                        return;
+                    const sessionUser = session?.user || session?.data?.user;
+                    if (sessionUser) {
+                        console.log("[useAuth] ✓ Found user in session:", sessionUser.email, "ID:", sessionUser.id);
+                        setState({
+                            user: sessionUser,
+                            loading: false,
+                            error: null,
+                        });
+                        checkingRef.current = false;
+                        return;
+                    }
+                    else {
+                        console.warn("[useAuth] ✗ No session user returned, marking unauthenticated. Response:", session);
+                        setState({
+                            user: null,
+                            loading: false,
+                            error: null,
+                        });
+                        checkingRef.current = false;
+                        return;
+                    }
+                }
+                catch (error) {
+                    if (!mounted)
+                        return;
+                    const isAbortError = (error as Error)?.name === "AbortError";
+                    const isNetworkError = error instanceof TypeError || (error as Error)?.message?.includes("fetch");
+                    if (isAbortError) {
+                        console.error(`[useAuth] Session check timed out (attempt ${attempt}/${maxRetries})`);
+                    }
+                    else if (isNetworkError) {
+                        console.error(`[useAuth] Network error (attempt ${attempt}/${maxRetries}):`, error);
+                    }
+                    else {
+                        console.error(`[useAuth] Session check failed (attempt ${attempt}/${maxRetries}):`, error);
+                    }
+                    if (attempt < maxRetries && (isNetworkError || isAbortError)) {
+                        const delay = retryDelays[attempt - 1];
+                        console.log(`[useAuth] Retry ${attempt}/${maxRetries} after ${delay}ms`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
                     setState({
                         user: null,
                         loading: false,
-                        error: null,
+                        error: isAbortError ? "timeout" : "Failed to check session",
                     });
+                    checkingRef.current = false;
+                    return;
                 }
-            } catch (error) {
-                if (!mounted) return;
-
-                setState({
-                    user: null,
-                    loading: false,
-                    error: "Failed to check session",
-                });
             }
+            checkingRef.current = false;
         }
-
         checkSession();
-
         return () => {
             mounted = false;
         };
     }, []);
-
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             await authClient.signOut();
             setState({
@@ -67,11 +125,11 @@ export function useAuth() {
                 error: null,
             });
             router.push("/signin");
-        } catch (error) {
+        }
+        catch (error) {
             console.error("Logout failed:", error);
         }
-    };
-
+    }, [router]);
     return {
         user: state.user,
         loading: state.loading,

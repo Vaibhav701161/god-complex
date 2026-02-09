@@ -3,24 +3,19 @@ export * from "../generated/prisma/client";
 import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
-
 const connectionString = process.env.DATABASE_URL;
-
 if (!connectionString) {
-  console.error("[PRISMA] DATABASE_URL is not set!");
+    console.error("[PRISMA] DATABASE_URL is not set!");
+    throw new Error("DATABASE_URL environment variable is required");
 }
-
+console.log("[PRISMA] Initializing Prisma client with PG adapter");
 const pool = new pg.Pool({
-  connectionString,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 20000,
+    connectionString,
 });
-
 const adapter = new PrismaPg(pool);
-
-// Create and export a properly configured Prisma client instance
-export const prisma = new PrismaClient({ adapter });
-
-// Also export the pool and adapter for advanced use cases
+const prismaInstance = new PrismaClient({
+    adapter,
+    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+});
+export const prisma = prismaInstance;
 export { pool, adapter };
