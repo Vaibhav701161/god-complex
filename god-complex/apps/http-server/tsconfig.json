@@ -12,16 +12,11 @@
         "./src/*"
       ],
       "@god-complex/prisma": [
-        "../../packages/prisma/src"
+        "../../packages/prisma/dist"
       ]
     }
   },
   "include": [
     "src/**/*"
-  ],
-  "references": [
-    {
-      "path": "../../packages/prisma"
-    }
   ]
 }
