@@ -4,6 +4,13 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@god-complex/prisma";
 import { authConfig } from "./config";
 import { sendVerificationEmail } from "./email-provider";
+
+console.log("[AUTH] Cookie Config:", {
+    domain: process.env.NODE_ENV === "production" ? ".godcomplex.app" : "undefined (dev)",
+    secure: process.env.NODE_ENV === "production",
+    node_env: process.env.NODE_ENV
+});
+
 const socialProviders: Record<string, {
     clientId: string;
     clientSecret: string;
@@ -24,6 +31,11 @@ export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
+    cookies: {
+        domain: process.env.NODE_ENV === "production" ? ".godcomplex.app" : undefined,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+    },
     emailAndPassword: {
         enabled: true,
         requireEmailVerification: false,
