@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { prisma } from "../src";
 import { randomUUID } from "crypto";
 import { scrypt, randomBytes } from "crypto";
@@ -211,10 +212,10 @@ async function main() {
 }
 main()
     .then(async () => {
-    await prisma.$disconnect();
-})
+        await prisma.$disconnect();
+    })
     .catch(async (e) => {
-    console.error(" Seeding failed:", e);
-    await prisma.$disconnect();
-    process.exit(1);
-});
+        console.error(" Seeding failed:", e);
+        await prisma.$disconnect();
+        process.exit(1);
+    });

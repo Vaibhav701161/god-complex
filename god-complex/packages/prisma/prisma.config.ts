@@ -1,3 +1,4 @@
+/// <reference types="node" />
 if (process.env.NODE_ENV !== "production") {
     require("dotenv/config");
 }
