@@ -102,7 +102,7 @@ function SigninContent() {
         setLoading(true);
         try {
             console.log("[SignIn] Starting Google OAuth flow...");
-            const apiUrl = window.location.origin;
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
             const next = searchParams.get("next") || "/dashboard";
             const callbackURL = encodeURIComponent(`${window.location.origin}${next}`);
             const redirectUrl = `${apiUrl}/api/auth/signin/google?callbackURL=${callbackURL}`;

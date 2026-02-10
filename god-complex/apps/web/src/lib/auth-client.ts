@@ -1,10 +1,14 @@
 "use client";
 import { createAuthClient } from "better-auth/react";
 const getApiUrl = (): string => {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_APP_URL;
+    if (envUrl && envUrl.trim().length > 0) {
+        return envUrl;
+    }
     if (typeof window !== "undefined") {
         return window.location.origin;
     }
-    return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    return "http://127.0.0.1:4000";
 };
 const loggingFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

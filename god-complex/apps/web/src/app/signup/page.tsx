@@ -103,7 +103,7 @@ export default function Signup() {
         setLoading(true);
         try {
             console.log("[SignUp] Starting Google OAuth flow...");
-            const apiUrl = window.location.origin;
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
             const callbackURL = encodeURIComponent(`${window.location.origin}/application`);
             const redirectUrl = `${apiUrl}/api/auth/signin/google?callbackURL=${callbackURL}`;
             console.log("[SignUp] Redirecting to:", redirectUrl);
