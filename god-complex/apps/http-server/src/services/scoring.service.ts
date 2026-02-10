@@ -1,6 +1,6 @@
 import { prisma } from "@god-complex/prisma";
-import { assertMembership } from "@/lib/guards";
-import { getWeekRange } from "@/lib/time";
+import { assertMembership } from "../lib/guards";
+import { getWeekRange } from "../lib/time";
 export async function getLeaderboard(groupId: string, userId: string, month: string) {
     await assertMembership(userId, groupId, month);
     const storedOutcomes = await prisma.monthlyOutcome.findMany({
@@ -37,9 +37,9 @@ export async function getLeaderboard(groupId: string, userId: string, month: str
     }
     return Object.entries(userScores)
         .map(([userId, s]) => ({
-        userId,
-        score: s.total / Math.max(s.days, 1),
-    }))
+            userId,
+            score: s.total / Math.max(s.days, 1),
+        }))
         .sort((a, b) => b.score - a.score);
 }
 export async function getWeeklyDiscomfortStatus(userId: string, groupId: string, date: string) {

@@ -1,7 +1,7 @@
 import { prisma } from "@god-complex/prisma";
 import { FailureReason } from "@god-complex/prisma";
-import { assertMembership } from "@/lib/guards";
-import { getMonth } from "@/lib/time";
+import { assertMembership } from "../lib/guards";
+import { getMonth } from "../lib/time";
 import { resolveGroupDay } from "../lib/time-resolver";
 interface CheckinInput {
     groupId: string;

@@ -1,4 +1,6 @@
-import "dotenv/config";
+if (process.env.NODE_ENV !== "production") {
+    require("dotenv/config");
+}
 import app from "./app";
 import { validateDatabaseConnection, disconnectDatabase } from "./lib/prisma";
 import { startDailyCron, startMonthlyCron, } from "./cron";

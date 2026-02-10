@@ -1,5 +1,5 @@
 import { prisma } from "@god-complex/prisma";
-import { assertMembership } from "@/lib/guards";
+import { assertMembership } from "../lib/guards";
 import { assignMonthlyPenalties } from "./penalty.service";
 import { logAudit } from "./audit.service";
 function getMonthBoundaries(month: string): {

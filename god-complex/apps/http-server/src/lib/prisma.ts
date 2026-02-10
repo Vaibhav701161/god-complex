@@ -1,4 +1,6 @@
-import "dotenv/config";
+if (process.env.NODE_ENV !== "production") {
+    require("dotenv/config");
+}
 import { prisma } from "@god-complex/prisma";
 export { prisma };
 export async function validateDatabaseConnection(failFast: boolean = false): Promise<boolean> {
