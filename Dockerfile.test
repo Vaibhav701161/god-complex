@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+WORKDIR /repo
+
+RUN apk add --no-cache openssl libc6-compat
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+COPY god-complex/package.json god-complex/pnpm-lock.yaml god-complex/pnpm-workspace.yaml god-complex/turbo.json ./
+COPY god-complex/apps ./apps
+COPY god-complex/packages ./packages
+
+RUN pnpm install
+RUN cd packages/prisma && pnpm exec prisma generate
+
+# Test tsc directly
+RUN cd packages/prisma && cat tsconfig.json
+RUN cd packages/prisma && ls -la src/
+RUN cd packages/prisma && npx tsc --listEmittedFiles 2>&1 | tail -50
+RUN cd packages/prisma && ls -la dist/ 2>&1 || echo "dist does not exist"
+

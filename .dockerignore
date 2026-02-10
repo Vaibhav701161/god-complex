@@ -49,9 +49,7 @@ docs/
 # Docker
 docker-compose*.yml
 
-# Exclude frontend and unused packages (backend-only image)
+# Exclude frontend app only (keep required packages for builds)
 god-complex/apps/web
-god-complex/packages/ui
-god-complex/packages/typescript-config
-god-complex/packages/eslint-config
 god-complex/scripts
+

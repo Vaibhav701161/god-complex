@@ -1,8 +1,8 @@
 if (process.env.NODE_ENV !== "production") {
     require("dotenv/config");
 }
-export * from "../generated/prisma/client";
-import { PrismaClient } from "../generated/prisma/client";
+export * from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 const connectionString = process.env.DATABASE_URL;
