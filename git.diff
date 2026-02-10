@@ -1,0 +1,49 @@
+diff --git a/god-complex/apps/web/.env.example b/god-complex/apps/web/.env.example
+index a88baee..80aede9 100644
+--- a/god-complex/apps/web/.env.example
++++ b/god-complex/apps/web/.env.example
+@@ -5,3 +5,7 @@ NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
+ 
+ # Your Railway backend API URL (e.g., https://your-backend.railway.app)
+ NEXT_PUBLIC_API_URL=https://your-backend.railway.app
++
++# Canonical Frontend URL
++NEXT_PUBLIC_SITE_URL=https://www.godcomplex.app
++
+diff --git a/god-complex/apps/web/next.config.ts b/god-complex/apps/web/next.config.ts
+index a215323..818286e 100644
+--- a/god-complex/apps/web/next.config.ts
++++ b/god-complex/apps/web/next.config.ts
+@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
+         return [
+             {
+                 source: "/api/:path*",
+-                destination: "http://127.0.0.1:4000/api/:path*",
++                destination: `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000"}/api/:path*`,
+             },
+         ];
+     },
+diff --git a/god-complex/apps/web/src/lib/auth-client.ts b/god-complex/apps/web/src/lib/auth-client.ts
+index f398e99..467fc7b 100644
+--- a/god-complex/apps/web/src/lib/auth-client.ts
++++ b/god-complex/apps/web/src/lib/auth-client.ts
+@@ -1,14 +1,12 @@
+ "use client";
+ import { createAuthClient } from "better-auth/react";
+ const getApiUrl = (): string => {
+-    const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_APP_URL;
+-    if (envUrl && envUrl.trim().length > 0) {
+-        return envUrl;
++    const envUrl = process.env.NEXT_PUBLIC_API_URL;
++    if (!envUrl) {
++        console.warn("[AuthClient] NEXT_PUBLIC_API_URL is not defined, defaulting to localhost");
++        return "http://127.0.0.1:4000";
+     }
+-    if (typeof window !== "undefined") {
+-        return window.location.origin;
+-    }
+-    return "http://127.0.0.1:4000";
++    return envUrl;
+ };
+ const loggingFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
