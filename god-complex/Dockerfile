@@ -9,9 +9,11 @@ RUN apk add --no-cache openssl libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 # Copy workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/http-server ./apps/http-server
-COPY packages/prisma ./packages/prisma
+# Railway builds from repo root where code is under god-complex/
+# Support both contexts: repo root (Railway) and god-complex/ (local)
+COPY god-complex/package.json god-complex/pnpm-lock.yaml god-complex/pnpm-workspace.yaml ./
+COPY god-complex/apps/http-server ./apps/http-server
+COPY god-complex/packages/prisma ./packages/prisma
 
 # Install all dependencies (keeps pnpm workspace structure intact)
 RUN pnpm install --frozen-lockfile
@@ -33,4 +35,3 @@ EXPOSE 8080
 
 # Run from workspace context (keeps all dependencies accessible)
 CMD ["node", "build/server.js"]
-
