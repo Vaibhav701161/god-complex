@@ -13,7 +13,7 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 # Support both contexts: repo root (Railway) and god-complex/ (local)
 COPY god-complex/package.json god-complex/pnpm-lock.yaml god-complex/pnpm-workspace.yaml ./
 COPY god-complex/apps/http-server ./apps/http-server
-COPY god-complex/packages/prisma ./packages/prisma
+COPY god-complex/packages ./packages
 
 # Install all dependencies (keeps pnpm workspace structure intact)
 RUN pnpm install --frozen-lockfile

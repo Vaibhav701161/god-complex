@@ -51,7 +51,4 @@ docker-compose*.yml
 
 # Exclude frontend and unused packages (backend-only image)
 apps/web
-packages/ui
-packages/typescript-config
-packages/eslint-config
 scripts
