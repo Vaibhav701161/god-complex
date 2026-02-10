@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
 
     const isProtectedRoute =
         pathname.startsWith("/dashboard") ||
@@ -21,38 +20,17 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    const sessionToken = request.cookies.get("better-auth.session") || request.cookies.get("auth.session");
+    const sessionCookie =
+        request.cookies.get("better-auth.session") ||
+        request.cookies.get("auth.session");
 
-    if (!sessionToken) {
+    if (!sessionCookie) {
         return NextResponse.redirect(
             new URL(`/signin?next=${pathname}`, request.url)
         );
     }
 
-    try {
-        const sessionResponse = await fetch(
-            `${API_URL}/api/auth/get-session`,
-            {
-                method: "GET",
-                headers: {
-                    Cookie: `better-auth.session=${sessionToken.value}`,
-                },
-            }
-        );
-
-        if (sessionResponse.ok) {
-            const session = await sessionResponse.json();
-            if (session?.user) {
-                return NextResponse.next();
-            }
-        }
-    } catch (error) {
-        console.error("Middleware session check failed", error);
-    }
-
-    return NextResponse.redirect(
-        new URL(`/signin?next=${pathname}`, request.url)
-    );
+    return NextResponse.next();
 }
 
 export const config = {
