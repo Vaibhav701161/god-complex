@@ -16,7 +16,7 @@ COPY god-complex/apps/http-server ./apps/http-server
 COPY god-complex/packages ./packages
 
 # Install all dependencies (keeps pnpm workspace structure intact)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Generate Prisma client
 RUN cd packages/prisma && pnpm exec prisma generate
