@@ -21,6 +21,7 @@ export function middleware(request: NextRequest) {
     }
 
     const sessionCookie =
+        request.cookies.get("better-auth.session_token") ||
         request.cookies.get("better-auth.session") ||
         request.cookies.get("auth.session");
 

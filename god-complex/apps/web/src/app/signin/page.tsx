@@ -136,7 +136,7 @@ function SigninContent() {
                     </div>
 
                     
-                    <div className="space-y-6" onKeyPress={handleKeyPress}>
+                    <form className="space-y-6" onKeyPress={handleKeyPress} onSubmit={(e) => { e.preventDefault(); if (email && password && !loading) handleSignin(); }}>
                         
                         <div className="space-y-2">
                             <label className="text-xs uppercase tracking-widest text-gray-400 pl-1">Email</label>
@@ -173,7 +173,7 @@ function SigninContent() {
                             </motion.div>)}
 
                         
-                        <button onClick={handleSignin} disabled={!email || !password || loading} className={`w-full py-4 rounded-lg font-bold tracking-[0.15em] text-sm transition-all duration-300 ${!email || !password || loading
+                        <button type="submit" disabled={!email || !password || loading} className={`w-full py-4 rounded-lg font-bold tracking-[0.15em] text-sm transition-all duration-300 ${!email || !password || loading
             ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
             : "bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_-5px_rgba(59,130,246,0.6)] hover:shadow-[0_0_40px_-5px_rgba(59,130,246,0.8)] border border-blue-500"}`}>
                             {loading ? "AUTHENTICATING..." : "ENTER"}
@@ -203,7 +203,7 @@ function SigninContent() {
                                 NO IDENTITY? APPLY HERE
                             </Link>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </motion.div>
         </main>);

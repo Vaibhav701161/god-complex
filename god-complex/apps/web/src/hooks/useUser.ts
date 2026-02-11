@@ -61,6 +61,9 @@ export function useUser() {
     }, []);
     useEffect(() => {
         let mounted = true;
+        const controllerRef = { current: null as AbortController | null };
+        const timeoutRef = { current: null as NodeJS.Timeout | null };
+
         async function fetchUser() {
             console.log("[useUser] fetchUser called - authLoading:", authLoading, "isAuthenticated:", isAuthenticated, "refetchTrigger:", refetchTrigger);
             if (authLoading) {
@@ -86,18 +89,19 @@ export function useUser() {
             const delays = [500, 1000];
             let lastError: Error | null = null;
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                if (!mounted) return;
                 try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    controllerRef.current = new AbortController();
+                    timeoutRef.current = setTimeout(() => controllerRef.current?.abort(), 5000);
                     console.log(`[useUser] Attempt ${attempt}/${maxRetries}: Fetching from /api/users/me`);
                     const response = await fetch("/api/users/me", {
                         credentials: "include",
                         headers: {
                             "Content-Type": "application/json",
                         },
-                        signal: controller.signal,
+                        signal: controllerRef.current.signal,
                     });
-                    clearTimeout(timeoutId);
+                    if (timeoutRef.current) clearTimeout(timeoutRef.current);
                     if (!mounted)
                         return;
                     if (response.status === 401) {
@@ -155,6 +159,12 @@ export function useUser() {
         fetchUser();
         return () => {
             mounted = false;
+            if (controllerRef.current) {
+                controllerRef.current.abort();
+            }
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
         };
     }, [isAuthenticated, authLoading, refetchTrigger]);
     return {

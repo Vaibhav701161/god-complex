@@ -79,16 +79,16 @@ export default function Signup() {
                 const session = await authClient.getSession();
                 if (session?.data?.user) {
                     console.log("[SignUp] ✓ Session established, redirecting to /application");
-                    router.push("/application");
+                    window.location.href = "/application";
                 }
                 else {
                     console.warn("[SignUp]  No session found, redirecting to signin");
-                    router.push("/signin?next=/application");
+                    window.location.href = "/signin?next=/application";
                 }
             }
             catch (sessionErr) {
                 console.error("[SignUp] Session check failed:", sessionErr);
-                router.push("/signin?next=/application");
+                window.location.href = "/signin?next=/application";
             }
         }
         catch (err) {
@@ -146,7 +146,7 @@ export default function Signup() {
                     </div>
 
                     
-                    <div className="space-y-6">
+                    <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); if (isFormValid && !loading) handleSignup(); }}>
                         
                         <div className="space-y-2">
                             <label className="text-xs uppercase tracking-widest text-gray-400 pl-1">Full Name</label>
@@ -186,7 +186,7 @@ export default function Signup() {
                             </motion.div>)}
 
                         
-                        <button onClick={handleSignup} disabled={!isFormValid || loading} className={`w-full py-4 rounded-lg font-bold tracking-[0.15em] text-sm transition-all duration-300 ${!isFormValid || loading
+                        <button type="submit" disabled={!isFormValid || loading} className={`w-full py-4 rounded-lg font-bold tracking-[0.15em] text-sm transition-all duration-300 ${!isFormValid || loading
             ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
             : "bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_-5px_rgba(59,130,246,0.6)] hover:shadow-[0_0_40px_-5px_rgba(59,130,246,0.8)] border border-blue-500"}`}>
                             {loading ? "INITIALIZING..." : "CREATE IDENTITY"}
@@ -216,7 +216,7 @@ export default function Signup() {
                                 ALREADY INITIALIZED? SIGN IN
                             </Link>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </motion.div>
         </main>);
