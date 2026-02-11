@@ -31,11 +31,7 @@ export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
-    cookies: {
-        domain: process.env.NODE_ENV === "production" ? ".godcomplex.app" : undefined,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-    },
+    cookies: authConfig.session.cookieOptions,
     emailAndPassword: {
         enabled: true,
         requireEmailVerification: false,

@@ -29,8 +29,9 @@ export const authConfig = {
         cookieName: "better-auth.session_token",
         cookieOptions: {
             httpOnly: true,
-            sameSite: "lax" as const,
+            sameSite: (process.env.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax" | "strict",
             secure: process.env.NODE_ENV === "production",
+            domain: process.env.NODE_ENV === "production" ? ".godcomplex.app" : undefined,
             path: "/",
         },
     },
