@@ -94,7 +94,8 @@ export function useUser() {
                     controllerRef.current = new AbortController();
                     timeoutRef.current = setTimeout(() => controllerRef.current?.abort(), 5000);
                     console.log(`[useUser] Attempt ${attempt}/${maxRetries}: Fetching from /api/users/me`);
-                    const response = await fetch("/api/users/me", {
+                    const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+                    const response = await fetch(`${apiURL}/api/users/me`, {
                         credentials: "include",
                         headers: {
                             "Content-Type": "application/json",

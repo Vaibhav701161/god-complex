@@ -31,7 +31,8 @@ export function useAuth() {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 5000);
                     console.log(`[useAuth] Attempt ${attempt}/${maxRetries}: Checking session via /api/auth/get-session`);
-                    const resp = await fetch("/api/auth/get-session", {
+                    const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+                    const resp = await fetch(`${apiURL}/api/auth/get-session`, {
                         credentials: "include",
                         signal: controller.signal,
                     });
