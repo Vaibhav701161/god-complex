@@ -1,4 +1,4 @@
-`"use client";
+"use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDashboardContext } from "@/hooks/useDashboardContext";
@@ -37,8 +37,9 @@ export default function GroupsPage() {
                 const groupIds = user.memberships.map((m: any) => m.groupId);
                 const uniqueGroupIds = [...new Set(groupIds)];
                 const groupPromises = uniqueGroupIds.map(async (groupId) => {
-                    const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-                    const response = await fetch(`${ apiURL } /api/groups / ${ groupId } `, {
+                    const apiURL = process.env.NEXT_PUBLIC_API_URL;
+                    if (!apiURL) throw new Error("NEXT_PUBLIC_API_URL not defined");
+                    const response = await fetch(apiURL + "/api/groups/" + groupId, {
                         credentials: "include",
                     });
                     if (!response.ok)
@@ -67,8 +68,9 @@ export default function GroupsPage() {
         const groupIds = user.memberships.map((m: any) => m.groupId);
         const uniqueGroupIds = [...new Set(groupIds)];
         const groupPromises = uniqueGroupIds.map(async (groupId) => {
-            const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-            const response = await fetch(`${ apiURL } /api/groups / ${ groupId } `, {
+            const apiURL = process.env.NEXT_PUBLIC_API_URL;
+            if (!apiURL) throw new Error("NEXT_PUBLIC_API_URL not defined");
+            const response = await fetch(apiURL + "/api/groups/" + groupId, {
                 credentials: "include",
             });
             if (!response.ok)
@@ -104,8 +106,9 @@ export default function GroupsPage() {
             setIsSubmitting(true);
             setFormError(null);
             try {
-                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-                const response = await fetch(`${ apiURL } /api/groups`, {
+                const apiURL = process.env.NEXT_PUBLIC_API_URL;
+                if (!apiURL) throw new Error("NEXT_PUBLIC_API_URL not defined");
+                const response = await fetch(apiURL + "/api/groups", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
@@ -118,17 +121,17 @@ export default function GroupsPage() {
                 const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
                 const errorMessage = errorData.message || errorData.error || "Failed to create group";
                 if (response.status === 400) {
-                    setFormError(`️ VALIDATION ERROR: ${ errorMessage } `);
+                    setFormError("VALIDATION ERROR: " + errorMessage);
                 }
                 else if (response.status === 500) {
-                    setFormError("️ SYSTEM ERROR: Server error. Please try again.");
+                    setFormError("SYSTEM ERROR: Server error. Please try again.");
                 }
                 else {
-                    setFormError(`️ ERROR: ${ errorMessage } `);
+                    setFormError("ERROR: " + errorMessage);
                 }
             }
             catch (err) {
-                setFormError("️ CONNECTION FAILED: Unable to reach server.");
+                setFormError("CONNECTION FAILED: Unable to reach server.");
             }
             finally {
                 setIsSubmitting(false);
@@ -207,8 +210,9 @@ export default function GroupsPage() {
             setJoinError(null);
             setGroupDetails(null);
             try {
-                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-                const response = await fetch(`${ apiURL } /api/groups / ${ groupId.trim() } `, {
+                const apiURL = process.env.NEXT_PUBLIC_API_URL;
+                if (!apiURL) throw new Error("NEXT_PUBLIC_API_URL not defined");
+                const response = await fetch(apiURL + "/api/groups/" + groupId.trim(), {
                     credentials: "include",
                 });
                 if (response.status === 404) {
@@ -236,10 +240,11 @@ export default function GroupsPage() {
             setIsJoining(true);
             setJoinError(null);
             try {
-                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
-                const response = await fetch(`${ apiURL } /api/groups / ${ groupDetails.id }/join`, {
-method: "POST",
-    credentials: "include",
+                const apiURL = process.env.NEXT_PUBLIC_API_URL;
+                if (!apiURL) throw new Error("NEXT_PUBLIC_API_URL not defined");
+                const response = await fetch(apiURL + "/api/groups/" + groupDetails.id + "/join", {
+                    method: "POST",
+                    credentials: "include",
                 });
 if (response.ok) {
     window.location.reload();
@@ -248,13 +253,13 @@ if (response.ok) {
 const errorData = await response.json().catch(() => ({ message: "Failed to join group" }));
 const message = errorData.message || "Failed to join group";
 if (response.status === 403) {
-    setJoinError(`️ BLOCKED: ${message}`);
+    setJoinError("BLOCKED: " + message);
 }
 else if (response.status === 400) {
-    setJoinError(`️ ${message}`);
+    setJoinError("ERROR: " + message);
 }
 else {
-    setJoinError(`️ ERROR: ${message}`);
+    setJoinError("ERROR: " + message);
 }
             }
             catch (err) {
@@ -359,7 +364,8 @@ return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12">
     </div>) : (<div className="space-y-6 max-w-5xl">
         {groups.map((group) => {
             const isExpanded = expandedContractId === group.id;
-            return (<div key={group.id} className={`border transition-all duration-300 ${isExpanded ? "border-blue-900/50 bg-[#0B101A]" : "border-[#1E293B] bg-[#0B101A]/50 hover:border-gray-700"}`}>
+            const groupClass = isExpanded ? "border-blue-900/50 bg-[#0B101A]" : "border-[#1E293B] bg-[#0B101A]/50 hover:border-gray-700";
+            return (<div key={group.id} className={"border transition-all duration-300 " + groupClass}>
 
                 <div onClick={() => setExpandedContractId(isExpanded ? null : group.id)} className="p-6 cursor-pointer flex items-center justify-between">
                     <div>
@@ -373,7 +379,7 @@ return (<main className="min-h-screen bg-[#0a0e14] pb-32 p-6 md:p-12">
                             MEMBERS: {group.memberCount || 0} {'//'} CUTOFF: {group.cutoffHour}:00 {group.timezone}
                         </div>
                     </div>
-                    <div className={`text-gray-500 transform transition-transform ${isExpanded ? "rotate-180" : ""}`}>▼</div>
+                    <div className={"text-gray-500 transform transition-transform " + (isExpanded ? "rotate-180" : "")}>▼</div>
                 </div>
 
 

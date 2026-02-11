@@ -3,8 +3,7 @@ import { createAuthClient } from "better-auth/react";
 const getApiUrl = (): string => {
     const envUrl = process.env.NEXT_PUBLIC_API_URL;
     if (!envUrl) {
-        console.warn("[AuthClient] NEXT_PUBLIC_API_URL is not defined, defaulting to localhost");
-        return "http://127.0.0.1:4000";
+        throw new Error("NEXT_PUBLIC_API_URL is not defined");
     }
     return envUrl;
 };
