@@ -5,8 +5,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUser } from "@/hooks/useUser";
 import { motion } from "framer-motion";
 import { GCLogo } from "@/components/IsometricCube";
-const API_URL = "";
+const getApiUrl = (): string => {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!envUrl) {
+        return "";
+    }
+    return envUrl;
+};
 export default function Application() {
+    const API_URL = getApiUrl();
     const router = useRouter();
     const { isAuthenticated, loading: authLoading } = useAuth();
     const { user, loading: userLoading, mutate, invalidate } = useUser();
