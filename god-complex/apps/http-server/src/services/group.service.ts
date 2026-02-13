@@ -146,6 +146,39 @@ export async function getGroup(groupId: string) {
         memberCount: group.memberships.length,
     };
 }
+export async function searchGroups(query: string) {
+    if (!query || typeof query !== "string" || query.length < 1) {
+        throw new Error("Search query must be at least 1 character");
+    }
+    const month = getMonth(new Date().toISOString());
+    const groups = await prisma.group.findMany({
+        where: {
+            name: {
+                contains: query,
+                mode: "insensitive",
+            },
+        },
+        include: {
+            memberships: {
+                where: { month },
+                include: {
+                    user: {
+                        select: { id: true, name: true, displayName: true },
+                    },
+                },
+            },
+            creator: {
+                select: { id: true, name: true, displayName: true },
+            },
+        },
+        take: 10,
+    });
+    return groups.map(group => ({
+        ...group,
+        memberCount: group.memberships.length,
+    }));
+}
+
 export async function lockGroup(groupId: string) {
     const group = await prisma.group.findUnique({
         where: { id: groupId },

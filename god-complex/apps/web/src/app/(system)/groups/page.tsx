@@ -201,30 +201,60 @@ export default function GroupsPage() {
         const [isJoining, setIsJoining] = useState(false);
         const [groupDetails, setGroupDetails] = useState<Group | null>(null);
         const [isSearching, setIsSearching] = useState(false);
+        const [searchResults, setSearchResults] = useState<Group[]>([]);
+        const [showResults, setShowResults] = useState(false);
         const searchGroup = async () => {
             if (!groupId.trim()) {
-                setJoinError("Please enter a Group ID");
+                setJoinError("Please enter a Group name or ID");
                 return;
             }
             setIsSearching(true);
             setJoinError(null);
             setGroupDetails(null);
+            setSearchResults([]);
             try {
                 const apiURL = process.env.NEXT_PUBLIC_API_URL;
                 if (!apiURL) throw new Error("NEXT_PUBLIC_API_URL not defined");
-                const response = await fetch(apiURL + "/api/groups/" + groupId.trim(), {
+                
+                // First try to search by name
+                console.log("[Groups] Searching for groups by name:", groupId);
+                const searchResponse = await fetch(apiURL + "/api/groups/search/" + encodeURIComponent(groupId.trim()), {
                     credentials: "include",
                 });
-                if (response.status === 404) {
-                    setJoinError("Group not found. Please check the Group ID.");
+                
+                if (searchResponse.ok) {
+                    const results = await searchResponse.json();
+                    console.log("[Groups] Search results:", results);
+                    if (results && results.length > 0) {
+                        setSearchResults(results);
+                        setShowResults(true);
+                        if (results.length === 1) {
+                            setGroupDetails(results[0]);
+                            setShowResults(false);
+                        }
+                        setIsSearching(false);
+                        return;
+                    }
+                }
+                
+                // If name search didn't work, try by exact ID
+                console.log("[Groups] Name search returned no results, trying by ID:", groupId);
+                const idResponse = await fetch(apiURL + "/api/groups/" + groupId.trim(), {
+                    credentials: "include",
+                });
+                
+                if (idResponse.status === 404) {
+                    setJoinError("Group not found. Try searching by group name or provide the exact Group ID.");
+                    setIsSearching(false);
                     return;
                 }
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ message: "Failed to fetch group" }));
+                if (!idResponse.ok) {
+                    const errorData = await idResponse.json().catch(() => ({ message: "Failed to fetch group" }));
                     setJoinError(errorData.message || "Failed to fetch group details");
+                    setIsSearching(false);
                     return;
                 }
-                const group = await response.json();
+                const group = await idResponse.json();
                 setGroupDetails(group);
             }
             catch (err) {
@@ -233,6 +263,11 @@ export default function GroupsPage() {
             finally {
                 setIsSearching(false);
             }
+        };
+        const handleSelectGroup = (group: Group) => {
+            setGroupDetails(group);
+            setSearchResults([]);
+            setShowResults(false);
         };
         const handleJoinGroup = async () => {
             if (!groupDetails)
@@ -278,17 +313,28 @@ return (<div className="max-w-2xl mx-auto border border-[#1E293B] bg-[#0B101A] p
 
     <div className="space-y-6">
         <div>
-            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-2">Group ID</label>
+            <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-2">Group Name or ID</label>
             <div className="flex gap-3">
-                <input type="text" value={groupId} onChange={(e) => setGroupId(e.target.value)} onKeyPress={(e) => e.key === "Enter" && searchGroup()} placeholder="Enter group ID (e.g., clxxxxx...)" className="flex-1 bg-[#050810] border border-[#334155] text-white p-3 font-mono text-xs outline-none focus:border-blue-500" />
+                <input type="text" value={groupId} onChange={(e) => setGroupId(e.target.value)} onKeyPress={(e) => e.key === "Enter" && searchGroup()} placeholder="Enter group name or ID (e.g., Love at Home)" className="flex-1 bg-[#050810] border border-[#334155] text-white p-3 font-mono text-xs outline-none focus:border-blue-500" />
                 <button onClick={searchGroup} disabled={isSearching} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-bold tracking-[0.2em] text-[10px] uppercase transition-colors">
                     {isSearching ? "..." : "SEARCH"}
                 </button>
             </div>
             <p className="mt-2 text-[10px] text-gray-600 font-mono">
-                * Ask the group owner for the Group ID
+                * Search by group name or ask the group owner for the Group ID
             </p>
         </div>
+
+        {showResults && searchResults.length > 0 && (<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="border border-blue-900/50 bg-blue-950/10 p-6 space-y-3">
+            <div className="text-[10px] text-gray-600 uppercase tracking-widest mb-3">Multiple Results Found ({searchResults.length})</div>
+            {searchResults.map((group) => (<button key={group.id} onClick={() => handleSelectGroup(group)} className="w-full text-left p-3 border border-blue-900/30 bg-blue-950/20 hover:bg-blue-900/30 rounded transition-colors">
+                <div className="text-sm font-bold text-white mb-1">{group.name}</div>
+                <div className="text-xs text-gray-400 flex justify-between">
+                    <span>TZ: {group.timezone}</span>
+                    <span>Members: {group.memberCount || 0}</span>
+                </div>
+            </button>))}
+        </motion.div>)}
 
         {groupDetails && (<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="border border-blue-900/50 bg-blue-950/10 p-6 space-y-4">
             <div>
@@ -313,7 +359,7 @@ return (<div className="max-w-2xl mx-auto border border-[#1E293B] bg-[#0B101A] p
     </div>
 
     <div className="mt-12 flex gap-4">
-        <button onClick={() => { setView("LIST"); setGroupId(""); setGroupDetails(null); setJoinError(null); }} className="flex-1 py-4 border border-[#334155] text-gray-400 hover:text-white font-bold tracking-[0.2em] text-xs uppercase transition-colors">
+        <button onClick={() => { setView("LIST"); setGroupId(""); setGroupDetails(null); setSearchResults([]); setShowResults(false); setJoinError(null); }} className="flex-1 py-4 border border-[#334155] text-gray-400 hover:text-white font-bold tracking-[0.2em] text-xs uppercase transition-colors">
             Cancel
         </button>
         <button onClick={handleJoinGroup} disabled={!groupDetails || isJoining} className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold tracking-[0.2em] text-xs uppercase transition-colors shadow-[0_0_20px_-5px_rgba(37,99,235,0.5)]">

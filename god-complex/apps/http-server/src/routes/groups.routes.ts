@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createGroup, joinGroup, lockGroup, getGroup, } from "../services/group.service";
+import { createGroup, joinGroup, lockGroup, getGroup, searchGroups } from "../services/group.service";
 import { requireAuth } from "../middleware/auth.middleware";
 import { prisma } from "@god-complex/prisma";
 const router = Router();
@@ -102,6 +102,21 @@ router.post("/:groupId/join", requireAuth, async (req, res) => {
 router.post("/:groupId/lock", requireAuth, async (req, res) => {
     await lockGroup(req.params.groupId);
     res.sendStatus(200);
+});
+router.get("/search/:query", requireAuth, async (req, res) => {
+    try {
+        const { query } = req.params;
+        const groups = await searchGroups(query);
+        res.json(groups);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        if (message.includes("Search query")) {
+            return res.status(400).json({ message });
+        }
+        console.error("Group search error:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
 });
 router.get("/:groupId", requireAuth, async (req, res) => {
     try {
