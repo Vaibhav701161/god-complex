@@ -16,9 +16,10 @@ export function useSystemMode() {
         }
         try {
             setLoading(true);
+            const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
-            const response = await fetch(`/api/state/${groupId}/${currentDate}`, {
+            const response = await fetch(`${apiURL}/api/state/${groupId}/${currentDate}`, {
                 credentials: "include",
                 signal: controller.signal,
             });
@@ -85,9 +86,10 @@ export function useAggregateSystemMode() {
                 setLoading(true);
                 const statePromises = user.memberships.map(async (membership: any) => {
                     try {
+                        const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 8000);
-                        const response = await fetch(`/api/state/${membership.groupId}/${currentDate}`, {
+                        const response = await fetch(`${apiURL}/api/state/${membership.groupId}/${currentDate}`, {
                             credentials: "include",
                             signal: controller.signal,
                         });

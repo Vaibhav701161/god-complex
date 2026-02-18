@@ -17,9 +17,10 @@ export function useLeaderboard() {
             }
             try {
                 setLoading(true);
+                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
-                const response = await fetch(`/api/leaderboard/leaderboard/${groupId}/${currentMonth}`, {
+                const response = await fetch(`${apiURL}/api/leaderboard/leaderboard/${groupId}/${currentMonth}`, {
                     credentials: "include",
                     signal: controller.signal,
                 });

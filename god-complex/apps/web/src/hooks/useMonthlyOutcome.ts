@@ -31,7 +31,8 @@ export function useMonthlyOutcome() {
             try {
                 setLoading(true);
                 setError(null);
-                const response = await fetch(`/api/monthly/${groupId}/${currentMonth}`, { credentials: "include" });
+                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+                const response = await fetch(`${apiURL}/api/monthly/${groupId}/${currentMonth}`, { credentials: "include" });
                 if (response.status === 404) {
                     setOutcome(null);
                     setIsClosed(false);

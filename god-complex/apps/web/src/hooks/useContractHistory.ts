@@ -18,9 +18,10 @@ export function useContractHistory(excludeToday: boolean = true) {
             try {
                 setContracts([]);
                 setLoading(true);
+                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
-                const response = await fetch(`/api/history/${groupId}/${currentMonth}`, {
+                const response = await fetch(`${apiURL}/api/history/${groupId}/${currentMonth}`, {
                     credentials: "include",
                     signal: controller.signal,
                 });
