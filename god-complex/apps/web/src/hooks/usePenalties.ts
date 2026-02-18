@@ -14,7 +14,8 @@ export function usePenalties(groupId: string | null, month: string) {
         try {
             setLoading(true);
             setError(null);
-            const response = await fetch(`/api/penalty/${groupId}/${month}`, {
+            const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+            const response = await fetch(`${apiURL}/api/penalty/${groupId}/${month}`, {
                 credentials: "include"
             });
             if (!response.ok) {
@@ -33,7 +34,8 @@ export function usePenalties(groupId: string | null, month: string) {
     }, [groupId, month]);
     const markComplete = useCallback(async (penaltyId: string) => {
         try {
-            const response = await fetch(`/api/penalty/${penaltyId}/complete`, {
+            const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+            const response = await fetch(`${apiURL}/api/penalty/${penaltyId}/complete`, {
                 method: "POST",
                 credentials: "include"
             });
@@ -49,7 +51,8 @@ export function usePenalties(groupId: string | null, month: string) {
     }, [fetchPenalties]);
     const submitAppeal = useCallback(async (penaltyId: string, reason: string) => {
         try {
-            const response = await fetch(`/api/penalty/${penaltyId}/appeal`, {
+            const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+            const response = await fetch(`${apiURL}/api/penalty/${penaltyId}/appeal`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"

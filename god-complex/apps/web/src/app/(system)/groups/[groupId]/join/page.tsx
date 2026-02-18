@@ -17,7 +17,8 @@ export default function JoinGroupPage() {
         async function fetchGroup() {
             try {
                 setLoading(true);
-                const response = await fetch(`/api/groups/${groupId}`, {
+                const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+                const response = await fetch(`${apiURL}/api/groups/${groupId}`, {
                     credentials: "include",
                 });
                 if (!response.ok) {
@@ -49,7 +50,8 @@ export default function JoinGroupPage() {
         setJoinError(null);
         setHasPenaltyBlock(false);
         try {
-            const response = await fetch(`/api/groups/${groupId}/join`, {
+            const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000";
+            const response = await fetch(`${apiURL}/api/groups/${groupId}/join`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
